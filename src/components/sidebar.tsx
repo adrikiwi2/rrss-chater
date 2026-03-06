@@ -9,6 +9,8 @@ import {
   Activity,
   LogOut,
   User,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import type { Flow } from "@/lib/types";
 
@@ -27,6 +29,7 @@ export function Sidebar() {
   const [flows, setFlows] = useState<FlowSummary[]>([]);
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -75,6 +78,76 @@ export function Sidebar() {
     router.push("/login");
   };
 
+  if (collapsed) {
+    return (
+      <aside className="flex h-screen w-[52px] flex-shrink-0 flex-col items-center border-r border-border bg-base-1 py-3">
+        {/* Brand icon */}
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15">
+          <Activity size={16} className="text-accent" />
+        </div>
+
+        {/* Expand button */}
+        <button
+          onClick={() => setCollapsed(false)}
+          className="mt-3 rounded-md p-1.5 text-text-muted transition-colors hover:bg-base-2 hover:text-text-secondary"
+          title="Expand sidebar"
+        >
+          <PanelLeftOpen size={16} />
+        </button>
+
+        {/* New flow */}
+        <button
+          onClick={createFlow}
+          disabled={isCreating}
+          className="mt-2 rounded-md p-1.5 text-text-muted transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-50"
+          title="New Flow"
+        >
+          <Plus size={16} />
+        </button>
+
+        {/* Flow icons */}
+        <nav className="mt-2 flex flex-1 flex-col items-center gap-1 overflow-y-auto">
+          {flows.map((flow) => {
+            const isActive = flow.id === activeFlowId;
+            return (
+              <button
+                key={flow.id}
+                onClick={() => router.push(`/flow/${flow.id}`)}
+                className={`rounded-md p-1.5 transition-all ${
+                  isActive
+                    ? "bg-accent/10 text-accent"
+                    : "text-text-muted hover:bg-base-2 hover:text-text-secondary"
+                }`}
+                title={flow.name}
+              >
+                <GitBranch size={15} />
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Footer */}
+        <div className="mt-auto flex flex-col items-center gap-1 pt-2">
+          {tenant && (
+            <div
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10"
+              title={`${tenant.name} (${tenant.email})`}
+            >
+              <User size={13} className="text-accent" />
+            </div>
+          )}
+          <button
+            onClick={logout}
+            className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-base-2 hover:text-text-secondary"
+            title="Sign out"
+          >
+            <LogOut size={13} />
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="flex h-screen w-[260px] flex-shrink-0 flex-col border-r border-border bg-base-1">
       {/* Brand */}
@@ -82,7 +155,7 @@ export function Sidebar() {
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15">
           <Activity size={16} className="text-accent" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-sm font-bold tracking-tight text-text-primary">
             FlowLab
           </h1>
@@ -90,6 +163,13 @@ export function Sidebar() {
             Conversation Router
           </p>
         </div>
+        <button
+          onClick={() => setCollapsed(true)}
+          className="rounded-md p-1.5 text-text-muted transition-colors hover:bg-base-2 hover:text-text-secondary"
+          title="Collapse sidebar"
+        >
+          <PanelLeftClose size={16} />
+        </button>
       </div>
 
       {/* New Flow */}
@@ -125,10 +205,15 @@ export function Sidebar() {
             >
               <GitBranch
                 size={14}
-                className={isActive ? "text-accent" : "text-text-muted group-hover:text-text-secondary"}
+                className={`flex-shrink-0 ${isActive ? "text-accent" : "text-text-muted group-hover:text-text-secondary"}`}
               />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-medium">{flow.name}</p>
+                {flow.description && (
+                  <p className="truncate text-[10px] text-text-secondary">
+                    {flow.description}
+                  </p>
+                )}
                 <p className="text-[10px] text-text-muted">
                   {flow.category_count} categories · {flow.simulation_count} sims
                 </p>

@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Send,
   Loader2,
+  HelpCircle,
 } from "lucide-react";
 import { ChatBubble } from "./chat-bubble";
 import { AiResultCard } from "./ai-result-card";
@@ -19,6 +20,7 @@ import type {
   SimMessage,
   InferenceResult,
   Category,
+  Template,
 } from "@/lib/types";
 
 interface SimulationPanelProps {
@@ -26,6 +28,7 @@ interface SimulationPanelProps {
   roleALabel: string;
   roleBLabel: string;
   categories: Category[];
+  templates: Template[];
 }
 
 export function SimulationPanel({
@@ -33,17 +36,21 @@ export function SimulationPanel({
   roleALabel,
   roleBLabel,
   categories,
+  templates,
 }: SimulationPanelProps) {
   const [simulations, setSimulations] = useState<Simulation[]>([]);
   const [activeSimId, setActiveSimId] = useState<string | null>(null);
   const [messages, setMessages] = useState<SimMessage[]>([]);
   const [viewMode, setViewMode] = useState<"a" | "b" | "inference">("b");
   const [inputText, setInputText] = useState("");
-  const [inferenceResult, setInferenceResult] =
-    useState<InferenceResult | null>(null);
   const [isInferring, setIsInferring] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsaved, setHasUnsaved] = useState(false);
+
+  // Map of msgId -> InferenceResult for each inference that generated a message
+  const [inferenceByMsgId, setInferenceByMsgId] = useState<Record<string, InferenceResult>>({});
+  // Set of msgIds whose result cards are expanded
+  const [expandedResults, setExpandedResults] = useState<Set<string>>(new Set());
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -66,9 +73,26 @@ export function SimulationPanel({
   const loadSim = (sim: Simulation) => {
     setActiveSimId(sim.id);
     setMessages(JSON.parse(sim.messages_json || "[]"));
-    setInferenceResult(
-      sim.last_result_json ? JSON.parse(sim.last_result_json) : null
-    );
+
+    // Load inference results map
+    if (sim.last_result_json) {
+      try {
+        const parsed = JSON.parse(sim.last_result_json);
+        // Handle both old format (single result) and new format (map)
+        if (parsed.detected_status) {
+          // Old format — single result, no msg association
+          setInferenceByMsgId({});
+        } else {
+          setInferenceByMsgId(parsed);
+        }
+      } catch {
+        setInferenceByMsgId({});
+      }
+    } else {
+      setInferenceByMsgId({});
+    }
+
+    setExpandedResults(new Set());
     setHasUnsaved(false);
   };
 
@@ -76,7 +100,8 @@ export function SimulationPanel({
   const newSim = () => {
     setActiveSimId(null);
     setMessages([]);
-    setInferenceResult(null);
+    setInferenceByMsgId({});
+    setExpandedResults(new Set());
     setHasUnsaved(false);
     setInputText("");
   };
@@ -95,8 +120,29 @@ export function SimulationPanel({
     setMessages((prev) => [...prev, msg]);
     setInputText("");
     setHasUnsaved(true);
-    setInferenceResult(null);
+    setExpandedResults(new Set());
     setTimeout(scrollToBottom, 50);
+  };
+
+  // Handle view mode change — collapse all result cards
+  const handleModeChange = (mode: "a" | "b" | "inference") => {
+    if (mode !== "inference") {
+      setExpandedResults(new Set());
+    }
+    setViewMode(mode);
+  };
+
+  // Toggle a specific result card
+  const toggleResult = (msgId: string) => {
+    setExpandedResults((prev) => {
+      const next = new Set(prev);
+      if (next.has(msgId)) {
+        next.delete(msgId);
+      } else {
+        next.add(msgId);
+      }
+      return next;
+    });
   };
 
   // Run inference
@@ -119,7 +165,24 @@ export function SimulationPanel({
       }
 
       const result: InferenceResult = await res.json();
-      setInferenceResult(result);
+
+      // Insert suggested template as role A message and link inference
+      if (result.suggested_template_id && templates) {
+        const tpl = templates.find((t) => t.id === result.suggested_template_id);
+        if (tpl) {
+          const msgId = nanoid();
+          const msg: SimMessage = {
+            id: msgId,
+            role: "a",
+            body: tpl.body,
+            timestamp: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, msg]);
+          setInferenceByMsgId((prev) => ({ ...prev, [msgId]: result }));
+          setExpandedResults((prev) => new Set(prev).add(msgId));
+        }
+      }
+
       setHasUnsaved(true);
       setTimeout(scrollToBottom, 50);
     } catch (error) {
@@ -128,6 +191,19 @@ export function SimulationPanel({
       setIsInferring(false);
     }
   };
+
+  // Get the latest inference result (for detected_status in save payload)
+  const latestResult = (() => {
+    const ids = Object.keys(inferenceByMsgId);
+    if (ids.length === 0) return null;
+    // Find the last inferred message in message order
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (inferenceByMsgId[messages[i].id]) {
+        return inferenceByMsgId[messages[i].id];
+      }
+    }
+    return null;
+  })();
 
   // Save simulation
   const saveSim = async () => {
@@ -140,10 +216,10 @@ export function SimulationPanel({
             ? messages[0].body.slice(0, 50)
             : "Empty simulation",
         messages_json: JSON.stringify(messages),
-        last_result_json: inferenceResult
-          ? JSON.stringify(inferenceResult)
+        last_result_json: Object.keys(inferenceByMsgId).length > 0
+          ? JSON.stringify(inferenceByMsgId)
           : null,
-        detected_status: inferenceResult?.detected_status || null,
+        detected_status: latestResult?.detected_status || null,
       };
 
       if (activeSimId) {
@@ -160,7 +236,6 @@ export function SimulationPanel({
         });
         const sim = await res.json();
         setActiveSimId(sim.id);
-        // Update with messages
         await fetch(`/api/simulations/${sim.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -271,7 +346,7 @@ export function SimulationPanel({
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
           <RoleSwitcher
             activeMode={viewMode}
-            onModeChange={setViewMode}
+            onModeChange={handleModeChange}
             roleALabel={roleALabel}
             roleBLabel={roleBLabel}
           />
@@ -305,7 +380,7 @@ export function SimulationPanel({
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          {messages.length === 0 && !inferenceResult ? (
+          {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-text-muted">
               <MessageCircle size={28} className="mb-2 opacity-40" />
               <p className="text-xs">
@@ -322,16 +397,57 @@ export function SimulationPanel({
             </div>
           ) : (
             <div className="space-y-3">
-              {messages.map((msg, i) => (
-                <ChatBubble
-                  key={msg.id}
-                  body={msg.body}
-                  role={msg.role}
-                  roleLabel={msg.role === "a" ? roleALabel : roleBLabel}
-                  timestamp={msg.timestamp}
-                  index={i}
-                />
-              ))}
+              {messages.map((msg, i) => {
+                const result = inferenceByMsgId[msg.id];
+                const isExpanded = expandedResults.has(msg.id);
+
+                return (
+                  <div key={msg.id}>
+                    {/* Inference widget above the generated message */}
+                    {result && (
+                      isExpanded ? (
+                        <div className="mb-2">
+                          <AiResultCard
+                            result={result}
+                            categories={categories}
+                            templates={templates}
+                          />
+                          <div className="flex justify-center -mt-1 mb-1">
+                            <button
+                              onClick={() => toggleResult(msg.id)}
+                              className="text-[10px] text-text-muted hover:text-accent transition-colors"
+                            >
+                              collapse
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-center py-1 mb-1">
+                          <button
+                            onClick={() => toggleResult(msg.id)}
+                            className="group flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/5 px-3 py-1.5 text-[11px] font-medium text-accent/70 transition-all hover:border-accent/40 hover:bg-accent/10 hover:text-accent"
+                          >
+                            <HelpCircle size={13} />
+                            <span
+                              className="font-mono text-[10px]"
+                              style={{ color: categories.find((c) => c.name === result.detected_status)?.color }}
+                            >
+                              {result.detected_status}
+                            </span>
+                          </button>
+                        </div>
+                      )
+                    )}
+                    <ChatBubble
+                      body={msg.body}
+                      role={msg.role}
+                      roleLabel={msg.role === "a" ? roleALabel : roleBLabel}
+                      timestamp={msg.timestamp}
+                      index={i}
+                    />
+                  </div>
+                );
+              })}
 
               {isInferring && (
                 <div className="flex justify-center py-4">
@@ -340,13 +456,6 @@ export function SimulationPanel({
                     Analyzing conversation...
                   </div>
                 </div>
-              )}
-
-              {inferenceResult && !isInferring && (
-                <AiResultCard
-                  result={inferenceResult}
-                  categories={categories}
-                />
               )}
             </div>
           )}

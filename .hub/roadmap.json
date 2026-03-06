@@ -1,0 +1,23 @@
+{
+  "vision": "Plataforma multi-tenant para diseñar, simular y testear flujos de conversación con IA (clasificación + extracción + selección de templates).",
+  "milestones": [
+    {
+      "id": "m1",
+      "title": "MVP funcional",
+      "target": "2026-03-05",
+      "status": "done"
+    },
+    {
+      "id": "m2",
+      "title": "Inferencia con templates + UX mejorada",
+      "target": "2026-03-06",
+      "status": "done"
+    }
+  ],
+  "principles": [
+    "Multi-tenant con aislamiento total por tenant",
+    "UI minimalista dark con Tailwind, sin librerías de componentes",
+    "SQLite local (libsql) en dev, Turso en producción",
+    "Gemini como LLM para clasificación e inferencia"
+  ]
+}

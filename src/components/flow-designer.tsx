@@ -7,13 +7,16 @@ import {
   Palette,
   FileText,
   Database,
+  MessageSquare,
+  ChevronRight as ChevronRightIcon,
 } from "lucide-react";
-import type { Category, ExtractField } from "@/lib/types";
+import type { Category, ExtractField, Template } from "@/lib/types";
 
 interface FlowDesignerProps {
   flowId: string;
   categories: Category[];
   extractFields: ExtractField[];
+  templates: Template[];
   onUpdate: () => void;
 }
 
@@ -32,6 +35,7 @@ export function FlowDesigner({
   flowId,
   categories,
   extractFields,
+  templates,
   onUpdate,
 }: FlowDesignerProps) {
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -129,10 +133,13 @@ export function FlowDesigner({
             {categories.map((cat) => (
               <CategoryRow
                 key={cat.id}
+                flowId={flowId}
                 category={cat}
+                templates={templates.filter((t) => t.category_id === cat.id)}
                 isSaving={savingId === cat.id}
                 onUpdate={updateCategory}
                 onDelete={deleteCategory}
+                onFlowUpdate={onUpdate}
               />
             ))}
           </div>
@@ -191,22 +198,58 @@ export function FlowDesigner({
 /* ── Category Row ─────────────────────────────── */
 
 function CategoryRow({
+  flowId,
   category,
+  templates,
   isSaving,
   onUpdate,
   onDelete,
+  onFlowUpdate,
 }: {
+  flowId: string;
   category: Category;
+  templates: Template[];
   isSaving: boolean;
   onUpdate: (id: string, data: Partial<Category>) => Promise<void>;
   onDelete: (id: string) => void;
+  onFlowUpdate: () => void;
 }) {
   const [name, setName] = useState(category.name);
   const [rules, setRules] = useState(category.rules);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const saveField = (field: string, value: string) => {
     onUpdate(category.id, { [field]: value });
+  };
+
+  const addTemplate = async () => {
+    await fetch("/api/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        flow_id: flowId,
+        name: "New Template",
+        body: "",
+        category_id: category.id,
+      }),
+    });
+    setShowTemplates(true);
+    onFlowUpdate();
+  };
+
+  const updateTemplate = async (id: string, data: Partial<Template>) => {
+    await fetch(`/api/templates/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    onFlowUpdate();
+  };
+
+  const deleteTemplate = async (id: string) => {
+    await fetch(`/api/templates/${id}`, { method: "DELETE" });
+    onFlowUpdate();
   };
 
   return (
@@ -239,6 +282,14 @@ function CategoryRow({
           placeholder="category_name"
         />
 
+        {/* Template count badge */}
+        {templates.length > 0 && (
+          <span className="flex items-center gap-1 rounded-full bg-base-3 px-2 py-0.5 text-[10px] font-mono text-text-muted">
+            <MessageSquare size={10} />
+            {templates.length}
+          </span>
+        )}
+
         {/* Status */}
         {isSaving && (
           <span className="text-[10px] text-accent">saving...</span>
@@ -259,7 +310,7 @@ function CategoryRow({
         </button>
       </div>
 
-      {/* Rules textarea (expandable) */}
+      {/* Rules + Templates (expandable) */}
       {expanded && (
         <div className="border-t border-border px-4 py-3">
           <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-text-muted">
@@ -273,8 +324,96 @@ function CategoryRow({
             className="w-full resize-none rounded-md border border-border bg-base-0 px-3 py-2 font-mono text-xs leading-relaxed text-text-primary outline-none transition-colors focus:border-accent/40"
             placeholder='Describe when to classify as this status, e.g.: "The prospect explicitly expresses interest, asks for pricing, or requests a demo."'
           />
+
+          {/* Templates section */}
+          <div className="mt-3">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setShowTemplates(!showTemplates)}
+                className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-muted transition-colors hover:text-text-secondary"
+              >
+                <ChevronRightIcon
+                  size={11}
+                  className={`transition-transform ${showTemplates ? "rotate-90" : ""}`}
+                />
+                Templates ({templates.length})
+              </button>
+              {showTemplates && (
+                <button
+                  onClick={addTemplate}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-text-muted transition-all hover:bg-base-3 hover:text-accent"
+                >
+                  <Plus size={11} />
+                  Add
+                </button>
+              )}
+            </div>
+            {showTemplates && (
+              <div className="mt-1.5 space-y-1.5">
+                {templates.map((tpl) => (
+                  <TemplateRow
+                    key={tpl.id}
+                    template={tpl}
+                    onUpdate={updateTemplate}
+                    onDelete={deleteTemplate}
+                  />
+                ))}
+                {templates.length === 0 && (
+                  <div className="rounded-md border border-dashed border-border bg-base-0/50 px-3 py-3 text-center">
+                    <p className="text-[11px] text-text-muted">
+                      No templates for this category.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Template Row ────────────────────────────── */
+
+function TemplateRow({
+  template,
+  onUpdate,
+  onDelete,
+}: {
+  template: Template;
+  onUpdate: (id: string, data: Partial<Template>) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [name, setName] = useState(template.name);
+  const [body, setBody] = useState(template.body);
+
+  return (
+    <div className="group rounded-md border border-border bg-base-0 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <MessageSquare size={11} className="flex-shrink-0 text-text-muted" />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => name !== template.name && onUpdate(template.id, { name })}
+          className="flex-1 bg-transparent text-xs font-medium text-text-primary outline-none placeholder:text-text-muted"
+          placeholder="Template name"
+        />
+        <button
+          onClick={() => onDelete(template.id)}
+          className="rounded p-1 text-transparent transition-all group-hover:text-text-muted group-hover:hover:text-danger"
+        >
+          <Trash2 size={11} />
+        </button>
+      </div>
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        onBlur={() => body !== template.body && onUpdate(template.id, { body })}
+        rows={2}
+        className="mt-1.5 w-full resize-none bg-transparent text-[11px] leading-relaxed text-text-secondary outline-none placeholder:text-text-muted"
+        placeholder="Write template text..."
+      />
     </div>
   );
 }

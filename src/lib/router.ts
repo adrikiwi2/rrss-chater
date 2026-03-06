@@ -15,7 +15,7 @@ export async function classifyConversation(
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
 
   const historyString = buildConversationHistory(
     messages,
@@ -27,6 +27,7 @@ export async function classifyConversation(
     flow,
     flow.categories,
     flow.extract_fields,
+    flow.templates,
     historyString
   );
 

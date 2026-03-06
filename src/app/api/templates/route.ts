@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { flow_id, name, body: templateBody, category_id } = body;
 
-  if (!flow_id || !name || !templateBody) {
+  if (!flow_id || !name || templateBody == null) {
     return NextResponse.json(
       { error: "flow_id, name, and body are required" },
       { status: 400 }

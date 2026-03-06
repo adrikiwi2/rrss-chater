@@ -3,20 +3,17 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import {
-  Pencil,
   Layers,
   MessageSquare,
-  FileCode,
   ChevronDown,
   ChevronUp,
   Settings2,
 } from "lucide-react";
 import { FlowDesigner } from "@/components/flow-designer";
 import { SimulationPanel } from "@/components/simulation-panel";
-import { TemplateEditor } from "@/components/template-editor";
 import type { FlowWithDetails } from "@/lib/types";
 
-type Tab = "designer" | "simulate" | "templates";
+type Tab = "designer" | "simulate";
 
 export default function FlowPage() {
   const { flowId } = useParams<{ flowId: string }>();
@@ -25,9 +22,7 @@ export default function FlowPage() {
   const [activeTab, setActiveTab] = useState<Tab>("designer");
   const [showConfig, setShowConfig] = useState(false);
 
-  // Editable header fields
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  // Editable config fields
   const [roleA, setRoleA] = useState("");
   const [roleB, setRoleB] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -37,8 +32,6 @@ export default function FlowPage() {
     if (!res.ok) return;
     const data: FlowWithDetails = await res.json();
     setFlow(data);
-    setName(data.name);
-    setDescription(data.description);
     setRoleA(data.role_a_label);
     setRoleB(data.role_b_label);
     setSystemPrompt(data.system_prompt);
@@ -60,7 +53,6 @@ export default function FlowPage() {
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: "designer", label: "Designer", icon: Layers },
     { key: "simulate", label: "Simulate", icon: MessageSquare },
-    { key: "templates", label: "Templates", icon: FileCode },
   ];
 
   if (loading || !flow) {
@@ -75,34 +67,27 @@ export default function FlowPage() {
     <div className="animate-fade-in flex h-full flex-col">
       {/* Header */}
       <div className="border-b border-border px-6 pt-5 pb-0">
-        <div className="flex items-start gap-4">
-          <div className="flex-1">
-            {/* Flow name */}
-            <div className="group flex items-center gap-2">
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={() => name !== flow.name && saveField("name", name)}
-                className="bg-transparent text-xl font-bold tracking-tight text-text-primary outline-none"
-                placeholder="Flow name"
-              />
-              <Pencil
-                size={13}
-                className="text-transparent transition-all group-hover:text-text-muted"
-              />
-            </div>
-
-            {/* Description */}
-            <input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={() =>
-                description !== flow.description &&
-                saveField("description", description)
-              }
-              className="mt-1 w-full bg-transparent text-sm text-text-secondary outline-none"
-              placeholder="Add a description..."
-            />
+        <div className="flex items-center justify-between">
+          {/* Tabs */}
+          <div className="flex gap-1">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.key;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-xs font-medium transition-all ${
+                    isActive
+                      ? "border-accent text-accent"
+                      : "border-transparent text-text-muted hover:text-text-secondary"
+                  }`}
+                >
+                  <Icon size={14} />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Config toggle */}
@@ -122,7 +107,7 @@ export default function FlowPage() {
 
         {/* Expandable config */}
         {showConfig && (
-          <div className="mt-4 animate-fade-in rounded-lg border border-border bg-base-0 p-4">
+          <div className="mt-4 mb-4 animate-fade-in rounded-lg border border-border bg-base-0 p-4">
             <div className="grid grid-cols-2 gap-4">
               {/* Role labels */}
               <div>
@@ -176,28 +161,6 @@ export default function FlowPage() {
             </div>
           </div>
         )}
-
-        {/* Tabs */}
-        <div className="mt-4 flex gap-1">
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.key;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-xs font-medium transition-all ${
-                  isActive
-                    ? "border-accent text-accent"
-                    : "border-transparent text-text-muted hover:text-text-secondary"
-                }`}
-              >
-                <Icon size={14} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* Tab Content */}
@@ -207,6 +170,7 @@ export default function FlowPage() {
             flowId={flowId}
             categories={flow.categories}
             extractFields={flow.extract_fields}
+            templates={flow.templates}
             onUpdate={fetchFlow}
           />
         )}
@@ -216,14 +180,7 @@ export default function FlowPage() {
             roleALabel={roleA || "Company"}
             roleBLabel={roleB || "Prospect"}
             categories={flow.categories}
-          />
-        )}
-        {activeTab === "templates" && (
-          <TemplateEditor
-            flowId={flowId}
             templates={flow.templates}
-            categories={flow.categories}
-            onUpdate={fetchFlow}
           />
         )}
       </div>

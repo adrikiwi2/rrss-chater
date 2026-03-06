@@ -1,18 +1,23 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
-import type { InferenceResult, Category } from "@/lib/types";
+import { MessageSquare } from "lucide-react";
+import type { InferenceResult, Category, Template } from "@/lib/types";
 
 interface AiResultCardProps {
   result: InferenceResult;
   categories: Category[];
+  templates: Template[];
 }
 
-export function AiResultCard({ result, categories }: AiResultCardProps) {
+export function AiResultCard({ result, categories, templates }: AiResultCardProps) {
   const matchedCategory = categories.find(
     (c) => c.name === result.detected_status
   );
   const statusColor = matchedCategory?.color || "#6366f1";
+
+  const suggestedTemplate = result.suggested_template_id && templates
+    ? templates.find((t) => t.id === result.suggested_template_id)
+    : null;
 
   const extractedEntries = Object.entries(result.extracted_info || {}).filter(
     ([, v]) => v != null
@@ -33,16 +38,6 @@ export function AiResultCard({ result, categories }: AiResultCardProps) {
         </div>
 
         <div className="relative p-4">
-          {/* Header */}
-          <div className="mb-3 flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/20">
-              <Sparkles size={13} className="text-accent" />
-            </div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-accent">
-              AI Router Decision
-            </span>
-          </div>
-
           {/* Status */}
           <div className="mb-3 flex items-center gap-2.5">
             <div
@@ -64,6 +59,24 @@ export function AiResultCard({ result, categories }: AiResultCardProps) {
           <p className="mb-3 text-xs leading-relaxed text-text-secondary">
             {result.reasoning}
           </p>
+
+          {/* Suggested Template */}
+          {suggestedTemplate && (
+            <div className="mb-3 rounded-lg border border-accent/15 bg-accent/5 p-3">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <MessageSquare size={12} className="text-accent" />
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-accent">
+                  Suggested Template
+                </span>
+              </div>
+              <p className="text-[11px] font-medium text-text-primary">
+                {suggestedTemplate.name}
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">
+                {suggestedTemplate.body}
+              </p>
+            </div>
+          )}
 
           {/* Extracted info */}
           {extractedEntries.length > 0 && (
