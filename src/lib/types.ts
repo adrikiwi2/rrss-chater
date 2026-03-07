@@ -67,6 +67,7 @@ export interface InferenceResult {
   detected_status: string;
   reasoning: string;
   extracted_info: Record<string, string | null>;
+  suggested_template_id?: string | null;
 }
 
 export interface FlowWithDetails extends Flow {
