@@ -1,47 +1,45 @@
-# Setup — FlowLab
+# Setup
 
 ## Requisitos
-
-- Node.js >= 18
+- Node.js 18+
 - npm
 
 ## Instalacion
-
 ```bash
 npm install
 ```
 
-## Variables de entorno
-
-Copiar `.env.local` con:
-
+## Variables de entorno (.env.local)
 ```
-GEMINI_API_KEY=<tu api key de Google AI>
+GEMINI_API_KEY=<tu api key de Google>
 TURSO_DATABASE_URL=file:flowlab.db
 TURSO_AUTH_TOKEN=
-JWT_SECRET=<string larga aleatoria>
-ADMIN_SECRET=<string para proteger endpoints admin>
+JWT_SECRET=<secret para JWT>
+ADMIN_SECRET=<secret para endpoints admin>
 ```
 
-## Dev
-
+## Desarrollo
 ```bash
-npm run dev
+npm run dev   # localhost:3000
 ```
 
-Arranca en `http://localhost:3000`.
+## Produccion (Vercel + Turso)
+- DB: libsql://flowlab-adrikiwi2.aws-eu-west-1.turso.io
+- Env vars se configuran en Vercel Dashboard > Settings > Environment Variables
+- Deploy automatico con cada push a master
 
 ## Crear tenant
-
 ```bash
-curl -X POST http://localhost:3000/api/admin/tenants \
-  -H "Content-Type: application/json" \
+curl -X POST https://<dominio>/api/admin/tenants \
   -H "Authorization: Bearer $ADMIN_SECRET" \
-  -d '{"name": "Nombre", "email": "user@example.com", "password": "pass"}'
+  -H "Content-Type: application/json" \
+  -d '{"name": "Cliente", "email": "email@client.com", "password": "pass"}'
 ```
 
-## Build
-
+## Seed de datos de ejemplo
 ```bash
-npm run build && npm run start
+curl -X POST https://<dominio>/api/admin/seed \
+  -H "Authorization: Bearer $ADMIN_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"tenant_id": "<id>"}'
 ```
