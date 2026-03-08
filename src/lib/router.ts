@@ -36,9 +36,16 @@ export async function classifyConversation(
 
   // Extract JSON — handle markdown-wrapped responses
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    return JSON.parse(jsonMatch[0]) as InferenceResult;
-  }
+  const parsed = jsonMatch
+    ? JSON.parse(jsonMatch[0])
+    : JSON.parse(text);
 
-  return JSON.parse(text) as InferenceResult;
+  return {
+    detected_status: parsed.detected_status,
+    reasoning: parsed.reasoning,
+    needs_human: parsed.needs_human ?? false,
+    needs_human_reason: parsed.needs_human_reason ?? null,
+    extracted_info: parsed.extracted_info ?? {},
+    suggested_template_id: parsed.suggested_template_id ?? null,
+  } as InferenceResult;
 }

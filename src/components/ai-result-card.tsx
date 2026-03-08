@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, AlertTriangle } from "lucide-react";
 import type { InferenceResult, Category, Template } from "@/lib/types";
 
 interface AiResultCardProps {
@@ -54,6 +54,23 @@ export function AiResultCard({ result, categories, templates }: AiResultCardProp
               {result.detected_status}
             </span>
           </div>
+
+          {/* Needs Human Flag */}
+          {result.needs_human && (
+            <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-400" />
+              <div>
+                <span className="text-[11px] font-semibold text-amber-400">
+                  Needs human review
+                </span>
+                {result.needs_human_reason && (
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-amber-300/70">
+                    {result.needs_human_reason}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Reasoning */}
           <p className="mb-3 text-xs leading-relaxed text-text-secondary">

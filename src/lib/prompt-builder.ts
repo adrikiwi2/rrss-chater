@@ -70,6 +70,8 @@ RESPOND EXCLUSIVELY IN JSON FORMAT WITH THIS EXACT STRUCTURE:
 {
   "detected_status": "one of the valid status values above",
   "reasoning": "Technical explanation of why this status was chosen, referencing specific parts of the conversation",
+  "needs_human": true or false,
+  "needs_human_reason": "Brief explanation of why a human should review this conversation, or null if not needed",
   "extracted_info": {
       ${extractionFields}
   }${hasTemplates ? `,
@@ -79,7 +81,8 @@ RESPOND EXCLUSIVELY IN JSON FORMAT WITH THIS EXACT STRUCTURE:
 IMPORTANT:
 - detected_status MUST be one of the valid status values listed above
 - reasoning should be concise but specific
+- needs_human should be true when: the conversation is ambiguous or doesn't clearly fit any category, the prospect asks something unexpected or outside the scope of available templates, there are signs of frustration or conflict, or the automated response would be inadequate. When needs_human is false, needs_human_reason must be null
 - extracted_info fields should be null if the information is not found in the conversation${hasTemplates ? `
-- suggested_template_id MUST be a template id from the detected category that best matches the current point in the conversation, or null` : ""}
+- suggested_template_id MUST be a template id from the detected category that best matches the current point in the conversation, or null. If needs_human is true, suggested_template_id should be null` : ""}
 - Respond ONLY with the JSON object, no additional text`;
 }

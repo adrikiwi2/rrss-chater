@@ -66,6 +66,8 @@ export interface Simulation {
 export interface InferenceResult {
   detected_status: string;
   reasoning: string;
+  needs_human: boolean;
+  needs_human_reason: string | null;
   extracted_info: Record<string, string | null>;
   suggested_template_id?: string | null;
 }
