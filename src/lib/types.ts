@@ -15,6 +15,7 @@ export interface Flow {
   system_prompt: string;
   role_a_label: string;
   role_b_label: string;
+  agent_config: string | null;
   created_at: string;
   updated_at: string;
 }

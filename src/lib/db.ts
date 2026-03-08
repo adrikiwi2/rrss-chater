@@ -41,6 +41,7 @@ export async function initSchema() {
       system_prompt TEXT DEFAULT '',
       role_a_label TEXT DEFAULT 'Company',
       role_b_label TEXT DEFAULT 'Prospect',
+      agent_config TEXT DEFAULT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -82,7 +83,91 @@ export async function initSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Agent tables: leads, messages, conversation state, outbox, events
+
+    CREATE TABLE IF NOT EXISTS leads (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      flow_id TEXT NOT NULL REFERENCES flows(id),
+      channel TEXT NOT NULL,
+      platform_handle TEXT NOT NULL,
+      display_name TEXT DEFAULT '',
+      stage TEXT DEFAULT 'new',
+      owner TEXT DEFAULT 'bot',
+      needs_human INTEGER DEFAULT 0,
+      needs_human_reason TEXT DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      lead_id TEXT NOT NULL REFERENCES leads(id),
+      direction TEXT NOT NULL,
+      text TEXT NOT NULL,
+      message_type TEXT DEFAULT 'text',
+      platform_message_id TEXT,
+      detected_status TEXT DEFAULT NULL,
+      needs_human INTEGER DEFAULT 0,
+      suggested_template_id TEXT DEFAULT NULL,
+      inference_result_json TEXT DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      received_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS conversation_state (
+      lead_id TEXT PRIMARY KEY REFERENCES leads(id),
+      stage TEXT DEFAULT 'new',
+      flags_json TEXT DEFAULT '{}',
+      interaction_count INTEGER DEFAULT 0,
+      last_inbound_at DATETIME DEFAULT NULL,
+      last_outbound_at DATETIME DEFAULT NULL,
+      last_processed_msg_id TEXT DEFAULT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS outbox (
+      id TEXT PRIMARY KEY,
+      lead_id TEXT NOT NULL REFERENCES leads(id),
+      channel TEXT NOT NULL,
+      action TEXT NOT NULL,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      status TEXT DEFAULT 'pending',
+      attempts INTEGER DEFAULT 0,
+      last_error TEXT DEFAULT NULL,
+      idempotency_key TEXT UNIQUE,
+      next_attempt_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS lead_events (
+      id TEXT PRIMARY KEY,
+      lead_id TEXT NOT NULL REFERENCES leads(id),
+      event_type TEXT NOT NULL,
+      actor TEXT DEFAULT 'bot',
+      from_stage TEXT DEFAULT NULL,
+      to_stage TEXT DEFAULT NULL,
+      meta_json TEXT DEFAULT '{}',
+      event_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_leads_tenant_flow ON leads(tenant_id, flow_id);
+    CREATE INDEX IF NOT EXISTS idx_leads_needs_human ON leads(tenant_id, needs_human);
+    CREATE INDEX IF NOT EXISTS idx_messages_lead ON messages(lead_id, received_at);
+    CREATE INDEX IF NOT EXISTS idx_messages_platform ON messages(platform_message_id);
+    CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox(status, next_attempt_at);
+    CREATE INDEX IF NOT EXISTS idx_lead_events_lead ON lead_events(lead_id, event_at);
   `);
+
+  // Safe migrations for existing databases
+  const migrations = [
+    "ALTER TABLE flows ADD COLUMN agent_config TEXT DEFAULT NULL",
+  ];
+  for (const sql of migrations) {
+    try { await db.execute(sql); } catch { /* column already exists */ }
+  }
 }
 
 let schemaReady: Promise<void> | null = null;
