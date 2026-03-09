@@ -8,6 +8,7 @@ import type {
   Simulation,
   FlowWithDetails,
 } from "./types";
+import type { ComposioConnection } from "./composio";
 
 let client: Client | null = null;
 
@@ -153,6 +154,19 @@ export async function initSchema() {
       event_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS composio_connections (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      channel TEXT NOT NULL,
+      composio_account_id TEXT NOT NULL,
+      composio_user_id TEXT NOT NULL,
+      platform_user_id TEXT DEFAULT NULL,
+      platform_username TEXT DEFAULT NULL,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_composio_conn_tenant ON composio_connections(tenant_id, channel);
     CREATE INDEX IF NOT EXISTS idx_leads_tenant_flow ON leads(tenant_id, flow_id);
     CREATE INDEX IF NOT EXISTS idx_leads_needs_human ON leads(tenant_id, needs_human);
     CREATE INDEX IF NOT EXISTS idx_messages_lead ON messages(lead_id, received_at);
@@ -164,6 +178,7 @@ export async function initSchema() {
   // Safe migrations for existing databases
   const migrations = [
     "ALTER TABLE flows ADD COLUMN agent_config TEXT DEFAULT NULL",
+    "ALTER TABLE flows ADD COLUMN is_published INTEGER DEFAULT 0",
   ];
   for (const sql of migrations) {
     try { await db.execute(sql); } catch { /* column already exists */ }
@@ -584,4 +599,306 @@ export async function deleteSimulation(id: string, tenantId: string): Promise<bo
     args: [id, tenantId],
   });
   return rs.rowsAffected > 0;
+}
+
+// --- Composio Connections ---
+
+export async function getComposioConnections(tenantId: string): Promise<ComposioConnection[]> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: "SELECT * FROM composio_connections WHERE tenant_id = ? AND is_active = 1 ORDER BY created_at DESC",
+    args: [tenantId],
+  });
+  return rs.rows as unknown as ComposioConnection[];
+}
+
+export async function getComposioConnectionByChannel(
+  tenantId: string,
+  channel: string
+): Promise<ComposioConnection | null> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: "SELECT * FROM composio_connections WHERE tenant_id = ? AND channel = ? AND is_active = 1 LIMIT 1",
+    args: [tenantId, channel],
+  });
+  return (rs.rows[0] as unknown as ComposioConnection) ?? null;
+}
+
+export async function createComposioConnection(data: {
+  id: string;
+  tenant_id: string;
+  channel: string;
+  composio_account_id: string;
+  composio_user_id: string;
+  platform_user_id?: string;
+  platform_username?: string;
+}): Promise<ComposioConnection> {
+  const c = await db();
+  await c.execute({
+    sql: `INSERT INTO composio_connections (id, tenant_id, channel, composio_account_id, composio_user_id, platform_user_id, platform_username)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      data.id,
+      data.tenant_id,
+      data.channel,
+      data.composio_account_id,
+      data.composio_user_id,
+      data.platform_user_id || null,
+      data.platform_username || null,
+    ],
+  });
+  const rs = await c.execute({ sql: "SELECT * FROM composio_connections WHERE id = ?", args: [data.id] });
+  return rs.rows[0] as unknown as ComposioConnection;
+}
+
+export async function deleteComposioConnection(id: string): Promise<boolean> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: "UPDATE composio_connections SET is_active = 0 WHERE id = ?",
+    args: [id],
+  });
+  return rs.rowsAffected > 0;
+}
+
+// --- Published Flows ---
+
+export async function getPublishedFlows(): Promise<Flow[]> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: "SELECT * FROM flows WHERE is_published = 1",
+    args: [],
+  });
+  return rs.rows as unknown as Flow[];
+}
+
+export async function setFlowPublished(id: string, tenantId: string, published: boolean): Promise<boolean> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: "UPDATE flows SET is_published = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?",
+    args: [published ? 1 : 0, id, tenantId],
+  });
+  return rs.rowsAffected > 0;
+}
+
+// --- Leads ---
+
+export interface Lead {
+  id: string;
+  tenant_id: string;
+  flow_id: string;
+  channel: string;
+  platform_handle: string;
+  display_name: string;
+  stage: string;
+  owner: string;
+  needs_human: number;
+  needs_human_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getLeadByHandle(
+  tenantId: string,
+  flowId: string,
+  platformHandle: string
+): Promise<Lead | null> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: "SELECT * FROM leads WHERE tenant_id = ? AND flow_id = ? AND platform_handle = ?",
+    args: [tenantId, flowId, platformHandle],
+  });
+  return (rs.rows[0] as unknown as Lead) ?? null;
+}
+
+export async function upsertLead(data: {
+  id: string;
+  tenant_id: string;
+  flow_id: string;
+  channel: string;
+  platform_handle: string;
+  display_name?: string;
+}): Promise<Lead> {
+  const c = await db();
+  const existing = await getLeadByHandle(data.tenant_id, data.flow_id, data.platform_handle);
+  if (existing) {
+    if (data.display_name && data.display_name !== existing.display_name) {
+      await c.execute({
+        sql: "UPDATE leads SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        args: [data.display_name, existing.id],
+      });
+    }
+    const rs = await c.execute({ sql: "SELECT * FROM leads WHERE id = ?", args: [existing.id] });
+    return rs.rows[0] as unknown as Lead;
+  }
+  await c.execute({
+    sql: "INSERT INTO leads (id, tenant_id, flow_id, channel, platform_handle, display_name) VALUES (?, ?, ?, ?, ?, ?)",
+    args: [data.id, data.tenant_id, data.flow_id, data.channel, data.platform_handle, data.display_name || ""],
+  });
+  const rs = await c.execute({ sql: "SELECT * FROM leads WHERE id = ?", args: [data.id] });
+  return rs.rows[0] as unknown as Lead;
+}
+
+export async function updateLeadNeedsHuman(
+  leadId: string,
+  needsHuman: boolean,
+  reason: string | null
+): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: "UPDATE leads SET needs_human = ?, needs_human_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+    args: [needsHuman ? 1 : 0, reason, leadId],
+  });
+}
+
+export async function resolveLead(
+  leadId: string,
+  stage: string,
+  tenantId: string
+): Promise<boolean> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: `UPDATE leads SET needs_human = 0, needs_human_reason = NULL, stage = ?, owner = 'bot', updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND tenant_id = ?`,
+    args: [stage, leadId, tenantId],
+  });
+  return rs.rowsAffected > 0;
+}
+
+// --- Messages ---
+
+export interface Message {
+  id: string;
+  lead_id: string;
+  direction: string;
+  text: string;
+  message_type: string;
+  platform_message_id: string | null;
+  detected_status: string | null;
+  needs_human: number;
+  suggested_template_id: string | null;
+  inference_result_json: string | null;
+  created_at: string;
+  received_at: string;
+}
+
+export async function messageExistsByPlatformId(platformMessageId: string): Promise<boolean> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: "SELECT 1 FROM messages WHERE platform_message_id = ? LIMIT 1",
+    args: [platformMessageId],
+  });
+  return rs.rows.length > 0;
+}
+
+export async function createMessage(data: {
+  id: string;
+  lead_id: string;
+  direction: string;
+  text: string;
+  platform_message_id?: string;
+  detected_status?: string;
+  needs_human?: boolean;
+  suggested_template_id?: string;
+  inference_result_json?: string;
+  received_at?: string;
+}): Promise<Message> {
+  const c = await db();
+  await c.execute({
+    sql: `INSERT INTO messages (id, lead_id, direction, text, platform_message_id, detected_status, needs_human, suggested_template_id, inference_result_json, received_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      data.id,
+      data.lead_id,
+      data.direction,
+      data.text,
+      data.platform_message_id || null,
+      data.detected_status || null,
+      data.needs_human ? 1 : 0,
+      data.suggested_template_id || null,
+      data.inference_result_json || null,
+      data.received_at || new Date().toISOString(),
+    ],
+  });
+  const rs = await c.execute({ sql: "SELECT * FROM messages WHERE id = ?", args: [data.id] });
+  return rs.rows[0] as unknown as Message;
+}
+
+export async function getMessagesByLead(leadId: string): Promise<Message[]> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: "SELECT * FROM messages WHERE lead_id = ? ORDER BY received_at ASC",
+    args: [leadId],
+  });
+  return rs.rows as unknown as Message[];
+}
+
+// --- Outbox ---
+
+export interface OutboxItem {
+  id: string;
+  lead_id: string;
+  channel: string;
+  action: string;
+  payload_json: string;
+  status: string;
+  attempts: number;
+  last_error: string | null;
+  idempotency_key: string | null;
+  next_attempt_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function createOutboxItem(data: {
+  id: string;
+  lead_id: string;
+  channel: string;
+  action: string;
+  payload_json: string;
+  idempotency_key?: string;
+}): Promise<OutboxItem> {
+  const c = await db();
+  await c.execute({
+    sql: `INSERT INTO outbox (id, lead_id, channel, action, payload_json, idempotency_key)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [data.id, data.lead_id, data.channel, data.action, data.payload_json, data.idempotency_key || null],
+  });
+  const rs = await c.execute({ sql: "SELECT * FROM outbox WHERE id = ?", args: [data.id] });
+  return rs.rows[0] as unknown as OutboxItem;
+}
+
+export async function getPendingOutboxByFlow(flowId: string): Promise<(OutboxItem & { lead_display_name: string; lead_platform_handle: string })[]> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: `SELECT o.*, l.display_name as lead_display_name, l.platform_handle as lead_platform_handle
+          FROM outbox o
+          JOIN leads l ON o.lead_id = l.id
+          WHERE l.flow_id = ? AND o.status = 'pending'
+          ORDER BY o.created_at ASC`,
+    args: [flowId],
+  });
+  return rs.rows as unknown as (OutboxItem & { lead_display_name: string; lead_platform_handle: string })[];
+}
+
+export async function getOutboxItem(id: string): Promise<OutboxItem | null> {
+  const c = await db();
+  const rs = await c.execute({ sql: "SELECT * FROM outbox WHERE id = ?", args: [id] });
+  return (rs.rows[0] as unknown as OutboxItem) ?? null;
+}
+
+export async function updateOutboxStatus(id: string, status: string, lastError?: string): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: "UPDATE outbox SET status = ?, last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+    args: [status, lastError || null, id],
+  });
+}
+
+export async function getLeadsByFlow(flowId: string): Promise<Lead[]> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: "SELECT * FROM leads WHERE flow_id = ? ORDER BY updated_at DESC",
+    args: [flowId],
+  });
+  return rs.rows as unknown as Lead[];
 }

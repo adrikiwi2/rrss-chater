@@ -16,6 +16,7 @@ export interface Flow {
   role_a_label: string;
   role_b_label: string;
   agent_config: string | null;
+  is_published: number;
   created_at: string;
   updated_at: string;
 }

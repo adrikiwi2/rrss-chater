@@ -7,7 +7,8 @@ import type { FlowWithDetails, SimMessage, InferenceResult } from "./types";
 
 export async function classifyConversation(
   flow: FlowWithDetails,
-  messages: SimMessage[]
+  messages: SimMessage[],
+  usedTemplateIds: string[] = []
 ): Promise<InferenceResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === "your_gemini_api_key_here") {
@@ -28,7 +29,8 @@ export async function classifyConversation(
     flow.categories,
     flow.extract_fields,
     flow.templates,
-    historyString
+    historyString,
+    usedTemplateIds
   );
 
   const result = await model.generateContent(prompt);

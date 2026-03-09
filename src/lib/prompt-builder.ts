@@ -18,7 +18,8 @@ export function buildClassificationPrompt(
   categories: Category[],
   extractFields: ExtractField[],
   templates: Template[],
-  conversationHistory: string
+  conversationHistory: string,
+  usedTemplateIds: string[] = []
 ): string {
   const categoryRules = categories
     .map((c) => `- STATUS: "${c.name}" → ${c.rules}`)
@@ -83,6 +84,7 @@ IMPORTANT:
 - reasoning should be concise but specific
 - needs_human should be true when: the conversation is ambiguous or doesn't clearly fit any category, the prospect asks something unexpected or outside the scope of available templates, there are signs of frustration or conflict, or the automated response would be inadequate. When needs_human is false, needs_human_reason must be null
 - extracted_info fields should be null if the information is not found in the conversation${hasTemplates ? `
-- suggested_template_id MUST be a template id from the detected category that best matches the current point in the conversation, or null. If needs_human is true, suggested_template_id should be null` : ""}
+- suggested_template_id MUST be a template id from the detected category that best matches the current point in the conversation, or null. If needs_human is true, suggested_template_id should be null
+- NEVER suggest a template that has already been used in this conversation${usedTemplateIds.length > 0 ? `. Already used template IDs: ${usedTemplateIds.join(", ")}` : ""}` : ""}
 - Respond ONLY with the JSON object, no additional text`;
 }

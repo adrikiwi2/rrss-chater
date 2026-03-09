@@ -25,17 +25,38 @@
     },
     {
       "id": "m4",
-      "title": "Agente local (FlowLab Agent)",
-      "status": "in-progress",
+      "title": "Integracion Composio (Instagram API)",
+      "status": "done",
       "due": null,
-      "notes": "Repo separado. FastAPI + PyInstaller. UI web en localhost. Scraping IG/WA via Playwright/CDP. Conecta con FlowLab API via Bearer token."
+      "notes": "SDK @composio/core integrado server-side. Modulo lib/composio.ts (listConversations, listMessages, sendTextMessage). Tabla composio_connections. Endpoint admin CRUD."
     },
     {
       "id": "m5",
+      "title": "Publish flow + ciclo de ejecucion",
+      "status": "done",
+      "due": null,
+      "notes": "Pestana Live en UI (Designer | Simulate | Live). Publish/Unpublish toggle con validaciones. Scan Inbox manual. Ciclo: poll conversations → import messages → inference Gemini → encolar en outbox. Approval UI: Approve & Send / Reject por cada mensaje propuesto. Needs Human Review con Resolve (selector de stage). Probado end-to-end en local: 13 convs, 47 msgs, 5 inferences, 1 queued."
+    },
+    {
+      "id": "m6",
+      "title": "OAuth self-service + hardening",
+      "status": "done",
+      "due": null,
+      "notes": "Connect Instagram via Composio magic link (connectedAccounts.initiate). Endpoints GET/POST /api/connect-instagram + callback. UI en Live tab. max_interactions hard limit implementado. Template non-repetition via usedTemplateIds."
+    },
+    {
+      "id": "m7",
+      "title": "Policy engine completo",
+      "status": "planned",
+      "due": null,
+      "notes": "Portar logica de policy_engine.py: policy_rules en orden, flags, advance_to. max_interactions ya implementado como hard limit en agent-cycle.ts."
+    },
+    {
+      "id": "m8",
       "title": "Dashboard de conversaciones",
       "status": "planned",
       "due": null,
-      "notes": "Vista en FlowLab web de leads, mensajes, needs_human queue. Los datos vienen del agente local via API."
+      "notes": "Vista detallada de leads con historial de mensajes, filtros por stage/needs_human, timeline de eventos."
     }
   ],
   "principles": [
@@ -43,6 +64,8 @@
     "Edicion inline con blur-to-save",
     "Aislamiento total por tenant via JWT cookie + Bearer token",
     "SQLite local en dev, Turso en prod (mismo driver @libsql/client)",
-    "agent_config admin-only: los tenants ven pero no editan la config del agente"
+    "agent_config admin-only: los tenants ven pero no editan la config del agente",
+    "Canal de ejecucion via Composio API (server-side), no scraping local",
+    "Human-in-the-loop: los mensajes se encolan para aprobacion, nunca se envian automaticamente"
   ]
 }

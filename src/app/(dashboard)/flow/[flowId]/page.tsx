@@ -5,16 +5,18 @@ import { useParams } from "next/navigation";
 import {
   Layers,
   MessageSquare,
+  Radio,
   ChevronDown,
   ChevronUp,
   Settings2,
 } from "lucide-react";
 import { FlowDesigner } from "@/components/flow-designer";
 import { SimulationPanel } from "@/components/simulation-panel";
+import { LivePanel } from "@/components/live-panel";
 import { AgentConfigPanel } from "@/components/agent-config-panel";
 import type { FlowWithDetails } from "@/lib/types";
 
-type Tab = "designer" | "simulate";
+type Tab = "designer" | "simulate" | "live";
 
 export default function FlowPage() {
   const { flowId } = useParams<{ flowId: string }>();
@@ -51,9 +53,19 @@ export default function FlowPage() {
     });
   };
 
+  const handleTogglePublish = async (published: boolean) => {
+    const res = await fetch(`/api/flows/${flowId}/publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ published }),
+    });
+    if (res.ok) fetchFlow();
+  };
+
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: "designer", label: "Designer", icon: Layers },
     { key: "simulate", label: "Simulate", icon: MessageSquare },
+    { key: "live", label: "Live", icon: Radio },
   ];
 
   if (loading || !flow) {
@@ -189,6 +201,16 @@ export default function FlowPage() {
             roleBLabel={roleB || "Prospect"}
             categories={flow.categories}
             templates={flow.templates}
+          />
+        )}
+        {activeTab === "live" && (
+          <LivePanel
+            flowId={flowId}
+            isPublished={!!flow.is_published}
+            onTogglePublish={handleTogglePublish}
+            categories={flow.categories}
+            templates={flow.templates}
+            agentConfig={flow.agent_config}
           />
         )}
       </div>
