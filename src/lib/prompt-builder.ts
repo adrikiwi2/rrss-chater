@@ -82,7 +82,8 @@ RESPOND EXCLUSIVELY IN JSON FORMAT WITH THIS EXACT STRUCTURE:
 IMPORTANT:
 - detected_status MUST be one of the valid status values listed above
 - reasoning should be concise but specific
-- needs_human should be true when: the conversation is ambiguous or doesn't clearly fit any category, the prospect asks something unexpected or outside the scope of available templates, there are signs of frustration or conflict, or the automated response would be inadequate. When needs_human is false, needs_human_reason must be null
+- needs_human should be true ONLY when: there are signs of frustration or conflict, the prospect asks something completely outside the scope of all categories, or the situation genuinely requires human judgement (e.g. complaints, complex negotiations). When needs_human is false, needs_human_reason must be null
+- needs_human should be FALSE when: the user type is unknown (business vs consumer), the conversation is early and lacks context, or the question can be answered with available templates/knowledge. Lack of qualification is NOT a reason to escalate — answer the question and ask a qualifying question instead
 - extracted_info fields should be null if the information is not found in the conversation${hasTemplates ? `
 - suggested_template_id MUST be a template id from the detected category that best matches the current point in the conversation, or null. If needs_human is true, suggested_template_id should be null
 - NEVER suggest a template that has already been used in this conversation${usedTemplateIds.length > 0 ? `. Already used template IDs: ${usedTemplateIds.join(", ")}` : ""}` : ""}
@@ -110,6 +111,7 @@ Using the reference documents and any attached files as your knowledge base, gen
 - If the information is not available, say so honestly and offer alternatives if any exist in the documents
 - Match the tone and language of the conversation
 - Be concise (direct message format, not email)
+- If the conversation does not yet reveal whether the user is a business (store, restaurant, distributor) or an end consumer, answer their question AND end with a brief qualifying question like "¿Tienes un negocio o es para consumo personal?"
 
 Respond ONLY with the message text, no JSON or extra formatting.`;
 }
