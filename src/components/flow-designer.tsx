@@ -254,19 +254,31 @@ function KnowledgeAddButtons({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
+  const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB (base64 expands ~33%, Vercel limit is 4.5MB)
+
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_FILE_SIZE) {
+      alert(`PDF too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is 3MB. Try compressing or reducing images in the PDF.`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append("flow_id", flowId);
       formData.append("name", file.name.replace(/\.pdf$/i, ""));
       formData.append("file", file);
-      await fetch("/api/knowledge-docs", {
+      const res = await fetch("/api/knowledge-docs", {
         method: "POST",
         body: formData,
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Upload failed" }));
+        alert(err.error || "Upload failed");
+        return;
+      }
       onUpdate();
     } finally {
       setUploading(false);
