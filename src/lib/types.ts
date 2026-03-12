@@ -80,6 +80,7 @@ export interface Simulation {
 export interface InferenceResult {
   detected_status: string;
   reasoning: string;
+  suggested_stage: string | null;
   needs_human: boolean;
   needs_human_reason: string | null;
   extracted_info: Record<string, string | null>;

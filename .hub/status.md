@@ -53,6 +53,10 @@
 - `agent_config` columna JSON en flows (admin-only)
 - Schema extendido: 5 tablas agent + composio_connections
 
+## Novedades (2026-03-12)
+- **Flow "Agente Comercial (pedidos)" para IberoExpress**: flow de procesamiento de pedidos B2B. 9 categorias (4 knowledge: pedido nuevo, stock, precio, repetir pedido + 5 template). 2 knowledge docs mock simulando datos SAP (catalogo 30 productos + 8 clientes con historial). 6 extract fields. Listo para demo desde Simulate.
+- **suggested_stage en inferencia**: nuevo campo en InferenceResult. El LLM sugiere en que stage del proceso esta la conversacion (recepcion, extraccion, validacion, propuesta...). Se muestra como badge violeta en la AI Result Card. Preparatorio para feature de stages en flow designer.
+
 ## Pendiente
 1. **🔴 Flow "Leads Telegram" para Tradingpro**: nuevo flow inbound via ads IG/FB → Telegram. Gancho: 3 meses gratis canal privado. Pendiente: ejemplos de interacciones reales del cliente + resolver preguntas de diseño (tono, escalacion, knowledge vs templates). Ver [task](tasks/tradingpro-telegram-flow.md) y [contexto](tasks/tradingpro-flow-context.md)
 2. **Policy engine completo**: portar logica de stages/flags/policy_rules desde flowlab-agent (max_interactions ya implementado)
@@ -66,6 +70,7 @@
 |---|---|---|---|---|
 | Test | test@test.com | Soporte Tecnico | Tenant de pruebas | instagram, 5 stages |
 | IberoExpress | ibero@test.com | Leads Organicos (inbound) | 11 cats (2 knowledge), 15 tpls, 2 knowledge docs, 7 fields | — |
+| IberoExpress | ibero@test.com | Agente Comercial (pedidos) | 9 cats (4 knowledge), 9 tpls, 2 knowledge docs (mock SAP), 6 fields | — |
 | Tradingpro | tradingpro@test.com | Outreach Inversiones (existente, no publicado) | 7 cats (template), 7 tpls, 8 fields, 0 knowledge docs | — |
 | Tradingpro | tradingpro@test.com | Leads Telegram (PENDIENTE) | Flow nuevo: inbound via ads → Telegram. En diseño | — |
 

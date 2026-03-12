@@ -71,6 +71,7 @@ RESPOND EXCLUSIVELY IN JSON FORMAT WITH THIS EXACT STRUCTURE:
 {
   "detected_status": "one of the valid status values above",
   "reasoning": "Technical explanation of why this status was chosen, referencing specific parts of the conversation",
+  "suggested_stage": "A short label (2-3 words) describing the current stage of progress in this conversation toward its goal. Examples: 'recepción', 'extracción datos', 'validación', 'propuesta generada', 'pendiente aprobación', 'cualificación', 'recogida datos', 'cierre'. Use your judgement based on the conversation flow and system prompt context.",
   "needs_human": true or false,
   "needs_human_reason": "Brief explanation of why a human should review this conversation, or null if not needed",
   "extracted_info": {

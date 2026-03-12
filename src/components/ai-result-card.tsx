@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, AlertTriangle, BookOpen } from "lucide-react";
+import { MessageSquare, AlertTriangle, BookOpen, GitBranch } from "lucide-react";
 import type { InferenceResult, Category, Template } from "@/lib/types";
 
 interface AiResultCardProps {
@@ -53,6 +53,14 @@ export function AiResultCard({ result, categories, templates }: AiResultCardProp
             >
               {result.detected_status}
             </span>
+            {result.suggested_stage && (
+              <span className="ml-auto flex items-center gap-1 rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5">
+                <GitBranch size={10} className="text-violet-400" />
+                <span className="font-mono text-[10px] text-violet-300">
+                  {result.suggested_stage}
+                </span>
+              </span>
+            )}
           </div>
 
           {/* Needs Human Flag */}

@@ -46,6 +46,7 @@ export async function classifyConversation(
   return {
     detected_status: parsed.detected_status,
     reasoning: parsed.reasoning,
+    suggested_stage: parsed.suggested_stage ?? null,
     needs_human: parsed.needs_human ?? false,
     needs_human_reason: parsed.needs_human_reason ?? null,
     extracted_info: parsed.extracted_info ?? {},
