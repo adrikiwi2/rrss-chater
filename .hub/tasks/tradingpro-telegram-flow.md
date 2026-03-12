@@ -21,6 +21,13 @@ Ver detalle completo de productos, precios y contexto en → [tradingpro-flow-co
 
 ### Pendiente de cliente
 - **Ejemplos de interacciones reales** — necesitamos que nos pasen conversaciones reales de este canal para diseñar categories y templates con precisión
+- **Link de registro para 3 meses gratis** del canal privado de Telegram
+
+### Info recopilada (2026-03-12)
+- Perfiles completos de Álvaro y José Basagoiti (fundadores, hermanos, imparten clases y gestionan portfolio)
+- Info completa de Darwinex (broker recomendado, canal de ingresos por referidos)
+- Todos los links de productos, Darwinex, registro, etc. guardados en context para usar en templates
+- Ver [tradingpro-flow-context.md](./tradingpro-flow-context.md) para detalle completo
 
 ### Preguntas pendientes (bloquean diseño del flow)
 4. **Tono** — ¿Tuteo informal o profesional? (el copy de la web mezcla ambos, tiende a informal)
