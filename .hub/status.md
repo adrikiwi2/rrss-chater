@@ -59,6 +59,7 @@
 3. **Dashboard de conversaciones**: vista detallada de leads con historial de mensajes
 4. **Cron automatico**: Vercel Cron o webhook de Composio para ejecutar ciclo sin boton manual
 5. **Catalogo completo IberoExpress**: anadir producto seco al knowledge doc (solo congelados por ahora)
+6. **Tradingpro backlog** (baja prioridad): 5 flows futuros — seguidores IG, LinkedIn (contactos/likes/visitas), WhatsApp seguimiento clientes, automatizacion RRSS, prospeccion afiliados. Ver [backlog](tasks/tradingpro-future-flows.md)
 
 ## Tenants en produccion
 | Tenant | Email | Flow | Contexto | agent_config |
