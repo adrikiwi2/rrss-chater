@@ -45,8 +45,8 @@ export async function POST(request: Request) {
     groups: Record<string, { jid: string; name?: string }>;
   };
 
-  if (!tenant_email || !flow_name || !groups) {
-    return NextResponse.json({ error: "tenant_email, flow_name, groups required" }, { status: 400 });
+  if (!tenant_email || (!flow_name && !body.flow_id) || !groups) {
+    return NextResponse.json({ error: "tenant_email, (flow_name or flow_id), groups required" }, { status: 400 });
   }
 
   // Resolve tenant
