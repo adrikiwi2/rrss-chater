@@ -50,25 +50,27 @@ export async function POST(request: Request) {
   }
 
   // Resolve tenant
-  const tenant = await getTenantByEmailRaw(tenant_email);
-  if (!tenant) {
+  const tenantRow = await getTenantByEmailRaw(tenant_email);
+  if (!tenantRow) {
     return NextResponse.json({ error: `Tenant not found: ${tenant_email}` }, { status: 404 });
   }
+  const tenantId = tenantRow.id;
 
   // Resolve flow
-  const flow = await getFlowByName(tenant.id, flow_name);
+  const flow = await getFlowByName(tenantId, flow_name);
   if (!flow) {
     return NextResponse.json({ error: `Flow not found: "${flow_name}" for tenant ${tenant_email}` }, { status: 404 });
   }
+  const flowId = flow.id;
 
   // Idempotency check
-  const existingCount = await countAlertRulesByFlow(flow.id);
+  const existingCount = await countAlertRulesByFlow(flowId);
   if (existingCount > 0) {
     return NextResponse.json({
       ok: false,
       message: `Flow already has ${existingCount} alert rule(s). Delete them first to re-seed.`,
-      tenant_id: tenant.id,
-      flow_id: flow.id,
+      tenant_id: tenantId,
+      flow_id: flowId,
     });
   }
 
@@ -80,7 +82,7 @@ export async function POST(request: Request) {
     const id = nanoid();
     await createAlertDestination({
       id,
-      tenant_id: tenant.id,
+      tenant_id: tenantId,
       name: g.name || defaultName,
       provider: "whatsapp",
       config: JSON.stringify({ jid: g.jid }),
@@ -91,7 +93,7 @@ export async function POST(request: Request) {
 
   async function addRule(destId: string, eventType: string, template: string) {
     const id = nanoid();
-    await createAlertRule({ id, tenant_id: tenant.id, flow_id: flow.id, event_type: eventType, template, destination_id: destId });
+    await createAlertRule({ id, tenant_id: tenantId, flow_id: flowId, event_type: eventType, template, destination_id: destId });
     created.rules.push(id);
   }
 
@@ -126,8 +128,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    tenant_id: tenant.id,
-    flow_id: flow.id,
+    tenant_id: tenantId,
+    flow_id: flowId,
     created,
   }, { status: 201 });
 }
