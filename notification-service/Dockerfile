@@ -4,7 +4,7 @@ RUN go install github.com/steipete/wacli/cmd/wacli@latest
 
 # Stage 2: runtime Node
 FROM node:20-alpine
-COPY --from=wacli-builder /root/go/bin/wacli /usr/local/bin/wacli
+COPY --from=wacli-builder /go/bin/wacli /usr/local/bin/wacli
 
 WORKDIR /app
 COPY package*.json ./
