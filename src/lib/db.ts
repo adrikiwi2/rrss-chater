@@ -178,7 +178,40 @@ export async function initSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Alert engine tables
+
+    CREATE TABLE IF NOT EXISTS alert_destinations (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      name TEXT NOT NULL,
+      provider TEXT NOT NULL DEFAULT 'whatsapp',
+      config TEXT NOT NULL DEFAULT '{}',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS alert_rules (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      flow_id TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+      event_type TEXT NOT NULL,
+      conditions TEXT DEFAULT NULL,
+      template TEXT NOT NULL,
+      destination_id TEXT NOT NULL REFERENCES alert_destinations(id),
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS alert_logs (
+      id TEXT PRIMARY KEY,
+      rule_id TEXT NOT NULL REFERENCES alert_rules(id),
+      status TEXT NOT NULL,
+      payload TEXT DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_composio_conn_tenant ON composio_connections(tenant_id, channel);
+    CREATE INDEX IF NOT EXISTS idx_alert_rules_lookup ON alert_rules(tenant_id, flow_id, event_type, is_active);
     CREATE INDEX IF NOT EXISTS idx_leads_tenant_flow ON leads(tenant_id, flow_id);
     CREATE INDEX IF NOT EXISTS idx_leads_needs_human ON leads(tenant_id, needs_human);
     CREATE INDEX IF NOT EXISTS idx_messages_lead ON messages(lead_id, received_at);
@@ -1014,4 +1047,104 @@ export async function getKnowledgeDocsWithContent(flowId: string): Promise<Knowl
     args: [flowId],
   });
   return rs.rows as unknown as KnowledgeDoc[];
+}
+
+// --- Alert Engine ---
+
+export interface AlertRuleWithDestination {
+  id: string;
+  tenant_id: string;
+  flow_id: string;
+  event_type: string;
+  conditions: string | null;
+  template: string;
+  destination_id: string;
+  is_active: number;
+  provider: string;
+  config: string;
+  dest_name: string;
+}
+
+export async function getAlertRulesForEvent(
+  tenantId: string,
+  flowId: string,
+  eventType: string
+): Promise<AlertRuleWithDestination[]> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: `SELECT r.*, d.provider, d.config, d.name as dest_name
+          FROM alert_rules r
+          JOIN alert_destinations d ON r.destination_id = d.id
+          WHERE r.tenant_id = ? AND r.flow_id = ? AND r.event_type = ?
+          AND r.is_active = 1 AND d.is_active = 1`,
+    args: [tenantId, flowId, eventType],
+  });
+  return rs.rows as unknown as AlertRuleWithDestination[];
+}
+
+export async function createAlertLog(data: {
+  id: string;
+  rule_id: string;
+  status: string;
+  payload?: string;
+}): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: "INSERT INTO alert_logs (id, rule_id, status, payload) VALUES (?, ?, ?, ?)",
+    args: [data.id, data.rule_id, data.status, data.payload || null],
+  });
+}
+
+export async function createAlertDestination(data: {
+  id: string;
+  tenant_id: string;
+  name: string;
+  provider: string;
+  config: string;
+}): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: "INSERT INTO alert_destinations (id, tenant_id, name, provider, config) VALUES (?, ?, ?, ?, ?)",
+    args: [data.id, data.tenant_id, data.name, data.provider, data.config],
+  });
+}
+
+export async function createAlertRule(data: {
+  id: string;
+  tenant_id: string;
+  flow_id: string;
+  event_type: string;
+  template: string;
+  destination_id: string;
+  conditions?: string | null;
+}): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: "INSERT INTO alert_rules (id, tenant_id, flow_id, event_type, conditions, template, destination_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    args: [data.id, data.tenant_id, data.flow_id, data.event_type, data.conditions || null, data.template, data.destination_id],
+  });
+}
+
+export async function getTenantByEmailRaw(email: string): Promise<{ id: string } | null> {
+  const c = await db();
+  const rs = await c.execute({ sql: "SELECT id FROM tenants WHERE email = ?", args: [email] });
+  return (rs.rows[0] as unknown as { id: string }) ?? null;
+}
+
+export async function getFlowByName(tenantId: string, name: string): Promise<{ id: string } | null> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: "SELECT id FROM flows WHERE tenant_id = ? AND name = ?",
+    args: [tenantId, name],
+  });
+  return (rs.rows[0] as unknown as { id: string }) ?? null;
+}
+
+export async function countAlertRulesByFlow(flowId: string): Promise<number> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: "SELECT COUNT(*) as n FROM alert_rules WHERE flow_id = ?",
+    args: [flowId],
+  });
+  return (rs.rows[0] as unknown as { n: number }).n;
 }

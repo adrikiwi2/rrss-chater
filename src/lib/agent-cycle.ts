@@ -22,6 +22,7 @@ import {
   listConversations,
   listMessages,
 } from "./composio";
+import { dispatch } from "./alert-dispatcher";
 import type { SimMessage, FlowWithDetails } from "./types";
 
 export interface CycleLog {
@@ -160,6 +161,15 @@ async function processConversation(
   // Only run inference if there are new inbound messages
   if (!hasNewInbound) return;
 
+  const time = new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  const leadName = lead.display_name || lead.platform_handle;
+
+  dispatch(conn.tenant_id, flow.id, "message.received", {
+    lead_name: leadName,
+    flow_name: flow.name,
+    time,
+  }).catch(() => {});
+
   // Skip inference if lead is already escalated to human
   if (lead.needs_human) return;
 
@@ -192,6 +202,14 @@ async function processConversation(
   const result = await classifyConversation(flow, simMessages, usedTemplateIds);
   log.inferencesRun++;
 
+  dispatch(conn.tenant_id, flow.id, "inference.executed", {
+    lead_name: leadName,
+    flow_name: flow.name,
+    category: result.detected_status || "",
+    needs_human: result.needs_human ? "Sí" : "No",
+    time,
+  }).catch(() => {});
+
   // Update the last inbound message with inference result
   const lastInbound = allMsgs.filter((m) => m.direction === "inbound").pop();
   if (lastInbound) {
@@ -202,7 +220,28 @@ async function processConversation(
   // Handle needs_human
   if (result.needs_human) {
     await updateLeadNeedsHuman(lead.id, true, result.needs_human_reason);
+    dispatch(conn.tenant_id, flow.id, "needs_human", {
+      lead_name: leadName,
+      flow_name: flow.name,
+      needs_human_reason: result.needs_human_reason || "",
+      time,
+    }).catch(() => {});
     return; // Don't auto-respond
+  }
+
+  // Fire lead.qualified if extracted_info has telefono or email
+  const extracted = result.extracted_info ?? {};
+  if (extracted.telefono || extracted.email) {
+    const qualifiedPayload: Record<string, string> = {
+      lead_name: leadName,
+      flow_name: flow.name,
+      category_name: result.detected_status || "",
+      time,
+    };
+    for (const [k, v] of Object.entries(extracted)) {
+      qualifiedPayload[k] = v ?? "";
+    }
+    dispatch(conn.tenant_id, flow.id, "lead.qualified", qualifiedPayload).catch(() => {});
   }
 
   // Check if detected category uses knowledge mode
@@ -228,6 +267,12 @@ async function processConversation(
         idempotency_key: `${lead.id}:${allMsgs[allMsgs.length - 1]?.id}`,
       });
       log.messagesSent++;
+      dispatch(conn.tenant_id, flow.id, "message.sent", {
+        lead_name: leadName,
+        flow_name: flow.name,
+        action: "knowledge",
+        time,
+      }).catch(() => {});
     }
     return;
   }
@@ -252,6 +297,13 @@ async function processConversation(
         idempotency_key: `${lead.id}:${allMsgs[allMsgs.length - 1]?.id}`,
       });
       log.messagesSent++; // queued, not sent yet
+      dispatch(conn.tenant_id, flow.id, "message.sent", {
+        lead_name: leadName,
+        flow_name: flow.name,
+        action: "template",
+        template_name: template.name,
+        time,
+      }).catch(() => {});
     }
   }
 }
