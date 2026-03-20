@@ -1,4 +1,4 @@
-# Estado del proyecto — 2026-03-12
+# Estado del proyecto — 2026-03-20
 
 ## Situacion actual
 - MVP local **completo**: auth, flow designer, simulacion con inferencia Gemini
@@ -59,8 +59,12 @@
 - **Knowledge prompt desacoplado de cualificacion B2B/B2C**: la instruccion de preguntar "¿tienes un negocio?" se ha movido de `prompt-builder.ts` (hardcoded, afectaba a todos los flows) al system prompt del flow Leads Organicos (donde corresponde). Esto permite que cada flow controle su propio comportamiento de cualificacion.
 - **System prompt Agente Comercial optimizado**: el agente sabe que el cliente ya esta identificado (nombre, empresa, codigo SAP, historial). No pregunta quien es, no explica sus pasos internos, escribe como el comercial humano. Rules de categorias knowledge actualizadas para reforzar esto.
 
+## Novedades (2026-03-20)
+- **Notification service (WhatsApp)**: nuevo microservicio en `notification-service/` para alertar a comerciales via WhatsApp cuando un lead proporciona datos de contacto. Stack: Node.js + Express + wacli CLI. Desplegado en Railway con Volume persistente para sesion wacli (`/root/.wacli`). Endpoints: `POST /auth` (QR en logs), `GET /chats` (obtener JID grupo), `POST /notify` (enviar mensaje). Auth via Bearer token (`NOTIFY_SECRET`). Pendiente: autenticar en Railway, obtener JID del grupo de pruebas, integrar trigger en `agent-cycle.ts`.
+
 ## Pendiente
-1. **🔴 Flow "Leads Telegram" para Tradingpro**: nuevo flow inbound via ads IG/FB → Telegram. Gancho: 3 meses gratis canal privado. Pendiente: ejemplos de interacciones reales del cliente + resolver preguntas de diseño (tono, escalacion, knowledge vs templates). Ver [task](tasks/tradingpro-telegram-flow.md) y [contexto](tasks/tradingpro-flow-context.md)
+1. **🟡 Notification service — integrar en agent-cycle**: una vez Railway este operativo, anadir trigger en `agent-cycle.ts`: cuando `extracted_info` incluya `telefono` o `email`, llamar a `POST /notify` con resumen del lead. Env vars a anadir en Vercel: `WHATSAPP_NOTIFY_URL`, `NOTIFY_SECRET`. Ver [task](tasks/whatsapp-notifications.md)
+2. **🔴 Flow "Leads Telegram" para Tradingpro**: nuevo flow inbound via ads IG/FB → Telegram. Gancho: 3 meses gratis canal privado. Pendiente: ejemplos de interacciones reales del cliente + resolver preguntas de diseño (tono, escalacion, knowledge vs templates). Ver [task](tasks/tradingpro-telegram-flow.md) y [contexto](tasks/tradingpro-flow-context.md)
 2. **Policy engine completo**: portar logica de stages/flags/policy_rules desde flowlab-agent (max_interactions ya implementado)
 3. **Dashboard de conversaciones**: vista detallada de leads con historial de mensajes
 4. **Cron automatico**: Vercel Cron o webhook de Composio para ejecutar ciclo sin boton manual
@@ -87,3 +91,4 @@
 |---|---|---|
 | Local | `file:flowlab.db` | `.env.local` |
 | Produccion | `libsql://flowlab-adrikiwi2.aws-eu-west-1.turso.io` | Vercel env vars |
+| Notification service | Railway | `NOTIFY_SECRET`, `WHATSAPP_GROUP_JID`, `WACLI_STORE=/root/.wacli` |
