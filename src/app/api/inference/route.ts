@@ -8,9 +8,10 @@ import type { SimMessage } from "@/lib/types";
 export async function POST(request: Request) {
   const tenantId = await getTenantId();
   const body = await request.json();
-  const { flow_id, messages } = body as {
+  const { flow_id, messages, fire_alerts = true } = body as {
     flow_id: string;
     messages: SimMessage[];
+    fire_alerts?: boolean;
   };
 
   if (!flow_id || !messages || messages.length === 0) {
@@ -49,36 +50,37 @@ export async function POST(request: Request) {
     }
 
     // Fire alert events (same as agent-cycle, but from simulation)
-    // Groups are dev-only during testing — in prod, real team members join the groups
-    const time = new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-    const lastMsg = messages[messages.length - 1];
-    const simPayload = {
-      lead_name: "🧪 Simulación",
-      flow_name: flow.name,
-      category: result.detected_status || "",
-      time,
-    };
+    // fire_alerts=false disables dispatch — use to avoid noise during UI testing
+    if (fire_alerts) {
+      const time = new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+      const simPayload = {
+        lead_name: "🧪 Simulación",
+        flow_name: flow.name,
+        category: result.detected_status || "",
+        time,
+      };
 
-    dispatch(tenantId, flow_id, "inference.executed", simPayload).catch(() => {});
+      dispatch(tenantId, flow_id, "inference.executed", simPayload).catch(() => {});
 
-    if (result.needs_human) {
-      dispatch(tenantId, flow_id, "needs_human", {
-        ...simPayload,
-        needs_human_reason: result.needs_human_reason || "",
-      }).catch(() => {});
-    }
-
-    if (!result.needs_human) {
-      const extracted = result.extracted_info ?? {};
-      if (extracted.telefono || extracted.email) {
-        const qualifiedPayload: Record<string, string> = {
+      if (result.needs_human) {
+        dispatch(tenantId, flow_id, "needs_human", {
           ...simPayload,
-          category_name: result.detected_status || "",
-        };
-        for (const [k, v] of Object.entries(extracted)) {
-          qualifiedPayload[k] = v ?? "";
+          needs_human_reason: result.needs_human_reason || "",
+        }).catch(() => {});
+      }
+
+      if (!result.needs_human) {
+        const extracted = result.extracted_info ?? {};
+        if (extracted.telefono || extracted.email) {
+          const qualifiedPayload: Record<string, string> = {
+            ...simPayload,
+            category_name: result.detected_status || "",
+          };
+          for (const [k, v] of Object.entries(extracted)) {
+            qualifiedPayload[k] = v ?? "";
+          }
+          dispatch(tenantId, flow_id, "lead.qualified", qualifiedPayload).catch(() => {});
         }
-        dispatch(tenantId, flow_id, "lead.qualified", qualifiedPayload).catch(() => {});
       }
     }
 

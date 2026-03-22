@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Plus,
   Trash2,
@@ -13,8 +13,13 @@ import {
   Upload,
   FileType,
   Type,
+  ArrowLeft,
+  ChevronRight,
+  Layers,
 } from "lucide-react";
 import type { Category, ExtractField, Template, KnowledgeDoc } from "@/lib/types";
+
+type DesignerView = "dashboard" | "categories" | "templates" | "knowledge" | "fields";
 
 interface FlowDesignerProps {
   flowId: string;
@@ -26,14 +31,8 @@ interface FlowDesignerProps {
 }
 
 const PRESET_COLORS = [
-  "#6366f1",
-  "#8b5cf6",
-  "#ec4899",
-  "#ef4444",
-  "#f59e0b",
-  "#22c55e",
-  "#06b6d4",
-  "#3b82f6",
+  "#6366f1", "#8b5cf6", "#ec4899", "#ef4444",
+  "#f59e0b", "#22c55e", "#06b6d4", "#3b82f6",
 ];
 
 export function FlowDesigner({
@@ -44,8 +43,8 @@ export function FlowDesigner({
   knowledgeDocs,
   onUpdate,
 }: FlowDesignerProps) {
+  const [view, setView] = useState<DesignerView>("dashboard");
   const [savingId, setSavingId] = useState<string | null>(null);
-
   const hasKnowledge = knowledgeDocs.length > 0;
 
   const addCategory = async () => {
@@ -84,11 +83,7 @@ export function FlowDesigner({
     await fetch("/api/extract-fields", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        flow_id: flowId,
-        field_name: "new_field",
-        field_type: "text",
-      }),
+      body: JSON.stringify({ flow_id: flowId, field_name: "new_field", field_type: "text" }),
     });
     onUpdate();
   };
@@ -107,58 +102,73 @@ export function FlowDesigner({
     onUpdate();
   };
 
+  const addTemplate = async (categoryId: string) => {
+    await fetch("/api/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flow_id: flowId, name: "New Template", body: "", category_id: categoryId }),
+    });
+    onUpdate();
+  };
+
+  const updateTemplate = async (id: string, data: Partial<Template>) => {
+    await fetch(`/api/templates/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    onUpdate();
+  };
+
+  const deleteTemplate = async (id: string) => {
+    await fetch(`/api/templates/${id}`, { method: "DELETE" });
+    onUpdate();
+  };
+
+  /* ── Dashboard ── */
+  if (view === "dashboard") {
+    return (
+      <DesignerDashboard
+        categories={categories}
+        templates={templates}
+        knowledgeDocs={knowledgeDocs}
+        extractFields={extractFields}
+        onNavigate={setView}
+      />
+    );
+  }
+
+  /* ── Detail Views ── */
+  const SECTION_META: Record<Exclude<DesignerView, "dashboard">, { label: string; icon: React.ElementType; color: string }> = {
+    categories: { label: "Classification Categories", icon: Palette, color: "text-accent" },
+    templates:  { label: "Templates",                 icon: MessageSquare, color: "text-violet" },
+    knowledge:  { label: "Knowledge Base",            icon: BookOpen, color: "text-emerald-400" },
+    fields:     { label: "Extract Fields",            icon: Database, color: "text-blue-400" },
+  };
+
+  const meta = SECTION_META[view as Exclude<DesignerView, "dashboard">];
+  const Icon = meta.icon;
+
   return (
-    <div className="space-y-8">
-      {/* Knowledge Base */}
-      <section>
-        <div className="mb-4 flex items-center justify-between">
+    <div className="space-y-5">
+      {/* Detail header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setView("dashboard")}
+            className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-text-muted transition-all hover:border-border-bright hover:text-text-secondary"
+          >
+            <ArrowLeft size={13} />
+            Overview
+          </button>
           <div className="flex items-center gap-2">
-            <BookOpen size={15} className="text-emerald-400" />
-            <h3 className="text-sm font-semibold text-text-primary">
-              Knowledge Base
-            </h3>
-            <span className="rounded-full bg-base-3 px-2 py-0.5 text-[10px] font-mono text-text-muted">
-              {knowledgeDocs.length}
-            </span>
+            <Icon size={15} className={meta.color} />
+            <h2 className="text-sm font-semibold text-text-primary">{meta.label}</h2>
           </div>
-          <KnowledgeAddButtons flowId={flowId} onUpdate={onUpdate} />
         </div>
 
-        <p className="mb-3 text-xs text-text-muted">
-          Documents the AI can reference when a category uses Knowledge mode (PDFs, text).
-        </p>
-
-        {knowledgeDocs.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border-bright bg-base-1/50 px-4 py-6 text-center">
-            <p className="text-xs text-text-muted">
-              No documents uploaded. Add PDFs or text to enable knowledge-based responses.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {knowledgeDocs.map((doc) => (
-              <KnowledgeDocRow
-                key={doc.id}
-                doc={doc}
-                onUpdate={onUpdate}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Categories */}
-      <section>
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Palette size={15} className="text-accent" />
-            <h3 className="text-sm font-semibold text-text-primary">
-              Classification Categories
-            </h3>
-            <span className="rounded-full bg-base-3 px-2 py-0.5 text-[10px] font-mono text-text-muted">
-              {categories.length}
-            </span>
-          </div>
+        {/* Section-specific add buttons */}
+        {view === "categories" && (
           <button
             onClick={addCategory}
             className="flex items-center gap-1.5 rounded-lg border border-border-bright px-3 py-1.5 text-xs font-medium text-text-secondary transition-all hover:border-accent/40 hover:text-accent"
@@ -166,17 +176,28 @@ export function FlowDesigner({
             <Plus size={13} />
             Add Category
           </button>
-        </div>
+        )}
+        {view === "knowledge" && (
+          <KnowledgeAddButtons flowId={flowId} onUpdate={onUpdate} />
+        )}
+        {view === "fields" && (
+          <button
+            onClick={addField}
+            className="flex items-center gap-1.5 rounded-lg border border-border-bright px-3 py-1.5 text-xs font-medium text-text-secondary transition-all hover:border-blue-400/40 hover:text-blue-400"
+          >
+            <Plus size={13} />
+            Add Field
+          </button>
+        )}
+      </div>
 
-        {categories.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border-bright bg-base-1/50 px-4 py-8 text-center">
-            <p className="text-xs text-text-muted">
-              No categories defined. Add at least one to enable AI classification.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {categories.map((cat) => (
+      {/* Section content */}
+      {view === "categories" && (
+        <div className="space-y-2">
+          {categories.length === 0 ? (
+            <EmptySection message="No categories defined. Add at least one to enable AI classification." />
+          ) : (
+            categories.map((cat) => (
               <CategoryRow
                 key={cat.id}
                 flowId={flowId}
@@ -184,83 +205,433 @@ export function FlowDesigner({
                 templates={templates.filter((t) => t.category_id === cat.id)}
                 isSaving={savingId === cat.id}
                 hasKnowledge={hasKnowledge}
+                hideTemplates
                 onUpdate={updateCategory}
                 onDelete={deleteCategory}
                 onFlowUpdate={onUpdate}
               />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Extract Fields */}
-      <section>
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Database size={15} className="text-violet" />
-            <h3 className="text-sm font-semibold text-text-primary">
-              Extract Fields
-            </h3>
-            <span className="rounded-full bg-base-3 px-2 py-0.5 text-[10px] font-mono text-text-muted">
-              {extractFields.length}
-            </span>
-          </div>
-          <button
-            onClick={addField}
-            className="flex items-center gap-1.5 rounded-lg border border-border-bright px-3 py-1.5 text-xs font-medium text-text-secondary transition-all hover:border-violet/40 hover:text-violet"
-          >
-            <Plus size={13} />
-            Add Field
-          </button>
+            ))
+          )}
         </div>
+      )}
 
-        <p className="mb-3 text-xs text-text-muted">
-          Fields the AI should extract from conversations (e.g., email, phone,
-          budget).
-        </p>
+      {view === "templates" && (
+        <TemplatesSection
+          categories={categories}
+          templates={templates}
+          onAdd={addTemplate}
+          onUpdate={updateTemplate}
+          onDelete={deleteTemplate}
+        />
+      )}
 
-        {extractFields.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border-bright bg-base-1/50 px-4 py-6 text-center">
-            <p className="text-xs text-text-muted">
-              No extract fields. The AI will only classify, not extract data.
-            </p>
+      {view === "knowledge" && (
+        <div>
+          <p className="mb-3 text-xs text-text-muted">
+            Documents the AI can reference when a category uses Knowledge mode.
+          </p>
+          {knowledgeDocs.length === 0 ? (
+            <EmptySection message="No documents uploaded. Add PDFs or text to enable knowledge-based responses." />
+          ) : (
+            <div className="space-y-2">
+              {knowledgeDocs.map((doc) => (
+                <KnowledgeDocRow key={doc.id} doc={doc} onUpdate={onUpdate} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {view === "fields" && (
+        <div>
+          <p className="mb-3 text-xs text-text-muted">
+            Fields the AI should extract from conversations (e.g., email, phone, budget).
+          </p>
+          {extractFields.length === 0 ? (
+            <EmptySection message="No extract fields. The AI will only classify, not extract data." />
+          ) : (
+            <div className="space-y-2">
+              {extractFields.map((field) => (
+                <FieldRow
+                  key={field.id}
+                  field={field}
+                  onUpdate={updateField}
+                  onDelete={deleteField}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Designer Dashboard ────────────────────────── */
+
+function DesignerDashboard({
+  categories,
+  templates,
+  knowledgeDocs,
+  extractFields,
+  onNavigate,
+}: {
+  categories: Category[];
+  templates: Template[];
+  knowledgeDocs: KnowledgeDoc[];
+  extractFields: ExtractField[];
+  onNavigate: (view: DesignerView) => void;
+}) {
+  const knowledgeCats = categories.filter((c) => c.mode === "knowledge").length;
+  const templateCats = categories.length - knowledgeCats;
+  const catsWithTemplates = categories.filter((c) =>
+    templates.some((t) => t.category_id === c.id)
+  ).length;
+  const pdfs = knowledgeDocs.filter((d) => d.doc_type === "pdf").length;
+  const texts = knowledgeDocs.filter((d) => d.doc_type !== "pdf").length;
+
+  // Template-mode categories with 0 templates (needs attention)
+  const emptyCats = categories.filter(
+    (c) => c.mode !== "knowledge" && !templates.some((t) => t.category_id === c.id)
+  ).length;
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-2 pb-1">
+        <Layers size={14} className="text-text-muted" />
+        <span className="text-xs font-semibold uppercase tracking-widest text-text-muted">
+          Flow Design Overview
+        </span>
+      </div>
+
+      {/* 2×2 Bento grid */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+        {/* Categories card */}
+        <DashCard
+          onClick={() => onNavigate("categories")}
+          icon={Palette}
+          iconColor="text-accent"
+          hoverBorder="hover:border-accent/30"
+          label="Categories"
+          count={categories.length}
+          unit={categories.length === 1 ? "category" : "categories"}
+          status={categories.length > 0 ? "ok" : "warn"}
+          statusLabel={categories.length > 0 ? "Configured" : "Required for inference"}
+        >
+          {categories.length > 0 ? (
+            <div className="space-y-2">
+              {/* Color dots */}
+              <div className="flex flex-wrap gap-1.5">
+                {categories.slice(0, 10).map((c) => (
+                  <div
+                    key={c.id}
+                    title={c.name}
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: c.color }}
+                  />
+                ))}
+                {categories.length > 10 && (
+                  <span className="text-[10px] text-text-muted">+{categories.length - 10}</span>
+                )}
+              </div>
+              <p className="text-[11px] text-text-muted">
+                {templateCats} template · {knowledgeCats} knowledge
+              </p>
+            </div>
+          ) : (
+            <p className="text-[11px] text-text-muted">Add categories to enable AI classification</p>
+          )}
+        </DashCard>
+
+        {/* Templates card */}
+        <DashCard
+          onClick={() => onNavigate("templates")}
+          icon={MessageSquare}
+          iconColor="text-violet"
+          hoverBorder="hover:border-violet/30"
+          label="Templates"
+          count={templates.length}
+          unit={templates.length === 1 ? "template" : "templates"}
+          status={emptyCats > 0 ? "warn" : templates.length > 0 ? "ok" : "muted"}
+          statusLabel={
+            emptyCats > 0
+              ? `${emptyCats} ${emptyCats === 1 ? "category" : "categories"} without template`
+              : templates.length > 0
+              ? `Across ${catsWithTemplates} ${catsWithTemplates === 1 ? "category" : "categories"}`
+              : "No templates yet"
+          }
+        >
+          {templates.length > 0 ? (
+            <div className="space-y-1">
+              {templates.slice(0, 3).map((t) => {
+                const cat = categories.find((c) => c.id === t.category_id);
+                return (
+                  <div key={t.id} className="flex items-center gap-2 min-w-0">
+                    {cat && (
+                      <div
+                        className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+                        style={{ backgroundColor: cat.color }}
+                      />
+                    )}
+                    <span className="truncate text-[11px] text-text-muted">{t.name}</span>
+                  </div>
+                );
+              })}
+              {templates.length > 3 && (
+                <p className="text-[11px] text-text-muted">+{templates.length - 3} more</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-[11px] text-text-muted">Response templates for template-mode categories</p>
+          )}
+        </DashCard>
+
+        {/* Knowledge card */}
+        <DashCard
+          onClick={() => onNavigate("knowledge")}
+          icon={BookOpen}
+          iconColor="text-emerald-400"
+          hoverBorder="hover:border-emerald-400/30"
+          label="Knowledge Base"
+          count={knowledgeDocs.length}
+          unit={knowledgeDocs.length === 1 ? "document" : "documents"}
+          status={knowledgeDocs.length > 0 ? "ok" : "muted"}
+          statusLabel={
+            knowledgeDocs.length > 0
+              ? `${pdfs} PDF · ${texts} text`
+              : "Optional — enables knowledge mode"
+          }
+        >
+          {knowledgeDocs.length > 0 ? (
+            <div className="space-y-1">
+              {knowledgeDocs.slice(0, 3).map((d) => (
+                <div key={d.id} className="flex items-center gap-2 min-w-0">
+                  {d.doc_type === "pdf" ? (
+                    <FileType size={11} className="flex-shrink-0 text-red-400" />
+                  ) : (
+                    <FileText size={11} className="flex-shrink-0 text-emerald-400" />
+                  )}
+                  <span className="truncate text-[11px] text-text-muted">{d.name}</span>
+                </div>
+              ))}
+              {knowledgeDocs.length > 3 && (
+                <p className="text-[11px] text-text-muted">+{knowledgeDocs.length - 3} more</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-[11px] text-text-muted">Upload PDFs or text for AI knowledge responses</p>
+          )}
+        </DashCard>
+
+        {/* Extract Fields card */}
+        <DashCard
+          onClick={() => onNavigate("fields")}
+          icon={Database}
+          iconColor="text-blue-400"
+          hoverBorder="hover:border-blue-400/30"
+          label="Extract Fields"
+          count={extractFields.length}
+          unit={extractFields.length === 1 ? "field" : "fields"}
+          status={extractFields.length > 0 ? "ok" : "muted"}
+          statusLabel={extractFields.length > 0 ? "Active extraction" : "Optional — extracts lead data"}
+        >
+          {extractFields.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {extractFields.slice(0, 6).map((f) => (
+                <span
+                  key={f.id}
+                  className="rounded-full border border-border bg-base-2 px-2 py-0.5 font-mono text-[10px] text-text-muted"
+                >
+                  {f.field_name}
+                </span>
+              ))}
+              {extractFields.length > 6 && (
+                <span className="text-[10px] text-text-muted">+{extractFields.length - 6}</span>
+              )}
+            </div>
+          ) : (
+            <p className="text-[11px] text-text-muted">Fields the AI extracts from conversations</p>
+          )}
+        </DashCard>
+      </div>
+    </div>
+  );
+}
+
+/* ── Dash Card ─────────────────────────────────── */
+
+function DashCard({
+  onClick,
+  icon: Icon,
+  iconColor,
+  hoverBorder,
+  label,
+  count,
+  unit,
+  status,
+  statusLabel,
+  children,
+}: {
+  onClick: () => void;
+  icon: React.ElementType;
+  iconColor: string;
+  hoverBorder: string;
+  label: string;
+  count: number;
+  unit: string;
+  status: "ok" | "warn" | "muted";
+  statusLabel: string;
+  children: React.ReactNode;
+}) {
+  const statusDot = status === "ok"
+    ? "bg-green-400"
+    : status === "warn"
+    ? "bg-amber-400"
+    : "bg-base-3";
+
+  return (
+    <div
+      onClick={onClick}
+      className={`group cursor-pointer rounded-xl border border-border bg-base-1 p-5 transition-all duration-200 hover:bg-base-2 hover:shadow-lg ${hoverBorder}`}
+      style={{ transform: "translateZ(0)" }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1.01)"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1)"; }}
+    >
+      {/* Top row */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon size={15} className={iconColor} />
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-text-muted">
+            {label}
+          </span>
+        </div>
+        <ChevronRight
+          size={14}
+          className={`text-text-muted transition-all duration-200 group-hover:translate-x-0.5 group-hover:${iconColor}`}
+        />
+      </div>
+
+      {/* KPI */}
+      <div className="mb-4">
+        <span className="text-4xl font-bold leading-none text-text-primary">{count}</span>
+        <span className="ml-2 text-sm text-text-muted">{unit}</span>
+      </div>
+
+      {/* Preview content */}
+      <div className="mb-4 min-h-[36px]">{children}</div>
+
+      {/* Status footer */}
+      <div className="flex items-center gap-1.5 border-t border-border pt-3">
+        <div className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
+        <span className="text-[10px] text-text-muted">{statusLabel}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Templates Section ─────────────────────────── */
+
+function TemplatesSection({
+  categories,
+  templates,
+  onAdd,
+  onUpdate,
+  onDelete,
+}: {
+  categories: Category[];
+  templates: Template[];
+  onAdd: (categoryId: string) => void;
+  onUpdate: (id: string, data: Partial<Template>) => void;
+  onDelete: (id: string) => void;
+}) {
+  const templateCategories = categories.filter((c) => c.mode !== "knowledge");
+
+  if (templateCategories.length === 0) {
+    return (
+      <EmptySection message="No template-mode categories. Switch a category to template mode to add response templates." />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {templateCategories.map((cat) => {
+        const catTemplates = templates.filter((t) => t.category_id === cat.id);
+        return (
+          <div key={cat.id} className="rounded-xl border border-border bg-base-1 overflow-hidden">
+            {/* Category header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="h-3 w-3 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: cat.color }}
+                />
+                <span className="font-mono text-sm font-medium text-text-primary">{cat.name}</span>
+                <span className="rounded-full bg-base-3 px-2 py-0.5 text-[10px] font-mono text-text-muted">
+                  {catTemplates.length}
+                </span>
+              </div>
+              <button
+                onClick={() => onAdd(cat.id)}
+                className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-text-muted transition-all hover:bg-base-3 hover:text-accent"
+              >
+                <Plus size={11} />
+                Add
+              </button>
+            </div>
+
+            {/* Templates list */}
+            {catTemplates.length === 0 ? (
+              <div className="px-4 py-4 text-center">
+                <p className="text-[11px] text-text-muted">
+                  No templates for this category.{" "}
+                  <button
+                    onClick={() => onAdd(cat.id)}
+                    className="cursor-pointer text-accent hover:underline"
+                  >
+                    Add one
+                  </button>
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {catTemplates.map((tpl) => (
+                  <div key={tpl.id} className="px-4 py-2.5">
+                    <TemplateRow template={tpl} onUpdate={onUpdate} onDelete={onDelete} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="space-y-2">
-            {extractFields.map((field) => (
-              <FieldRow
-                key={field.id}
-                field={field}
-                onUpdate={updateField}
-                onDelete={deleteField}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Empty Section ─────────────────────────────── */
+
+function EmptySection({ message }: { message: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-border-bright bg-base-1/50 px-4 py-8 text-center">
+      <p className="text-xs text-text-muted">{message}</p>
     </div>
   );
 }
 
 /* ── Knowledge Add Buttons ─────────────────────── */
 
-function KnowledgeAddButtons({
-  flowId,
-  onUpdate,
-}: {
-  flowId: string;
-  onUpdate: () => void;
-}) {
+function KnowledgeAddButtons({ flowId, onUpdate }: { flowId: string; onUpdate: () => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-
-  const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB (base64 expands ~33%, Vercel limit is 4.5MB)
+  const MAX_FILE_SIZE = 3 * 1024 * 1024;
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_FILE_SIZE) {
-      alert(`PDF too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is 3MB. Try compressing or reducing images in the PDF.`);
+      alert(`PDF too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is 3MB.`);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
@@ -270,10 +641,7 @@ function KnowledgeAddButtons({
       formData.append("flow_id", flowId);
       formData.append("name", file.name.replace(/\.pdf$/i, ""));
       formData.append("file", file);
-      const res = await fetch("/api/knowledge-docs", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await fetch("/api/knowledge-docs", { method: "POST", body: formData });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Upload failed" }));
         alert(err.error || "Upload failed");
@@ -290,24 +658,14 @@ function KnowledgeAddButtons({
     await fetch("/api/knowledge-docs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        flow_id: flowId,
-        name: "New Document",
-        content_text: "",
-      }),
+      body: JSON.stringify({ flow_id: flowId, name: "New Document", content_text: "" }),
     });
     onUpdate();
   };
 
   return (
     <div className="flex items-center gap-1.5">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".pdf"
-        className="hidden"
-        onChange={handlePdfUpload}
-      />
+      <input ref={fileInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePdfUpload} />
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={uploading}
@@ -329,17 +687,19 @@ function KnowledgeAddButtons({
 
 /* ── Knowledge Doc Row ─────────────────────────── */
 
-function KnowledgeDocRow({
-  doc,
-  onUpdate,
-}: {
-  doc: KnowledgeDoc;
-  onUpdate: () => void;
-}) {
+function KnowledgeDocRow({ doc, onUpdate }: { doc: KnowledgeDoc; onUpdate: () => void }) {
   const [name, setName] = useState(doc.name);
   const [expanded, setExpanded] = useState(false);
   const [contentText, setContentText] = useState<string | null>(null);
   const [loadingContent, setLoadingContent] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [contentText]);
 
   const saveName = async () => {
     if (name !== doc.name) {
@@ -416,18 +776,19 @@ function KnowledgeDocRow({
           <Trash2 size={13} />
         </button>
       </div>
-
       {expanded && !isPdf && (
         <div className="border-t border-border px-4 py-3">
           {loadingContent ? (
             <p className="text-xs text-text-muted">Loading...</p>
           ) : (
             <textarea
+              ref={textareaRef}
               value={contentText || ""}
               onChange={(e) => setContentText(e.target.value)}
               onBlur={saveContent}
-              rows={6}
-              className="w-full resize-none rounded-md border border-border bg-base-0 px-3 py-2 font-mono text-xs leading-relaxed text-text-primary outline-none transition-colors focus:border-emerald-400/40"
+              rows={1}
+              style={{ overflow: "hidden" }}
+              className="w-full resize-none rounded-md border border-border bg-base-0 px-3 py-2 text-xs leading-relaxed text-text-primary outline-none transition-colors focus:border-emerald-400/40"
               placeholder="Paste or type your reference content here..."
             />
           )}
@@ -445,6 +806,7 @@ function CategoryRow({
   templates,
   isSaving,
   hasKnowledge,
+  hideTemplates = false,
   onUpdate,
   onDelete,
   onFlowUpdate,
@@ -454,6 +816,7 @@ function CategoryRow({
   templates: Template[];
   isSaving: boolean;
   hasKnowledge: boolean;
+  hideTemplates?: boolean;
   onUpdate: (id: string, data: Partial<Category>) => Promise<void>;
   onDelete: (id: string) => void;
   onFlowUpdate: () => void;
@@ -461,7 +824,16 @@ function CategoryRow({
   const [name, setName] = useState(category.name);
   const [rules, setRules] = useState(category.rules);
   const [expanded, setExpanded] = useState(true);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const rulesRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = rulesRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [rules]);
 
   const isKnowledgeMode = category.mode === "knowledge";
 
@@ -470,20 +842,14 @@ function CategoryRow({
   };
 
   const toggleMode = () => {
-    const newMode = isKnowledgeMode ? "template" : "knowledge";
-    onUpdate(category.id, { mode: newMode });
+    onUpdate(category.id, { mode: isKnowledgeMode ? "template" : "knowledge" });
   };
 
   const addTemplate = async () => {
     await fetch("/api/templates", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        flow_id: flowId,
-        name: "New Template",
-        body: "",
-        category_id: category.id,
-      }),
+      body: JSON.stringify({ flow_id: flowId, name: "New Template", body: "", category_id: category.id }),
     });
     setShowTemplates(true);
     onFlowUpdate();
@@ -507,14 +873,10 @@ function CategoryRow({
     <div className="rounded-lg border border-border bg-base-1 transition-all hover:border-border-bright">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3">
-        {/* Color picker */}
         <div className="relative">
           <div
-            className="h-4 w-4 rounded-full cursor-pointer ring-2 ring-offset-1 ring-offset-base-1"
-            style={{
-              backgroundColor: category.color,
-              boxShadow: `0 0 0 2px var(--color-base-1), 0 0 0 4px ${category.color}`,
-            }}
+            className="h-4 w-4 rounded-full cursor-pointer"
+            style={{ boxShadow: `0 0 0 2px var(--color-base-1), 0 0 0 4px ${category.color}` }}
           />
           <input
             type="color"
@@ -523,8 +885,6 @@ function CategoryRow({
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           />
         </div>
-
-        {/* Name */}
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -532,29 +892,19 @@ function CategoryRow({
           className="flex-1 bg-transparent font-mono text-sm font-medium text-text-primary outline-none placeholder:text-text-muted"
           placeholder="category_name"
         />
-
-        {/* Mode badge */}
         {isKnowledgeMode && (
           <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
             <BookOpen size={10} />
             Knowledge
           </span>
         )}
-
-        {/* Template count badge (only in template mode) */}
         {!isKnowledgeMode && templates.length > 0 && (
           <span className="flex items-center gap-1 rounded-full bg-base-3 px-2 py-0.5 text-[10px] font-mono text-text-muted">
             <MessageSquare size={10} />
             {templates.length}
           </span>
         )}
-
-        {/* Status */}
-        {isSaving && (
-          <span className="text-[10px] text-accent">saving...</span>
-        )}
-
-        {/* Expand / Delete */}
+        {isSaving && <span className="text-[10px] text-accent">saving...</span>}
         <button
           onClick={() => setExpanded(!expanded)}
           className="rounded-md p-1.5 text-text-muted transition-all hover:bg-base-3 hover:text-text-secondary"
@@ -569,33 +919,43 @@ function CategoryRow({
         </button>
       </div>
 
-      {/* Rules + Templates/Knowledge (expandable) */}
+      {/* Body */}
       {expanded && (
         <div className="border-t border-border px-4 py-3">
-          <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-text-muted">
+          {/* Classification Rules — collapsible */}
+          <button
+            onClick={() => setRulesOpen((v) => !v)}
+            className="mb-1.5 flex cursor-pointer items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-muted transition-colors hover:text-text-secondary"
+          >
+            <ChevronRightIcon
+              size={11}
+              className={`transition-transform ${rulesOpen ? "rotate-90" : ""}`}
+            />
             Classification Rules
-          </label>
-          <textarea
-            value={rules}
-            onChange={(e) => setRules(e.target.value)}
-            onBlur={() => rules !== category.rules && saveField("rules", rules)}
-            rows={3}
-            className="w-full resize-none rounded-md border border-border bg-base-0 px-3 py-2 font-mono text-xs leading-relaxed text-text-primary outline-none transition-colors focus:border-accent/40"
-            placeholder='Describe when to classify as this status, e.g.: "The prospect explicitly expresses interest, asks for pricing, or requests a demo."'
-          />
+          </button>
+          {rulesOpen && (
+            <textarea
+              ref={rulesRef}
+              value={rules}
+              onChange={(e) => setRules(e.target.value)}
+              onBlur={() => rules !== category.rules && saveField("rules", rules)}
+              rows={1}
+              style={{ overflow: "hidden" }}
+              className="mb-3 w-full resize-none rounded-md border border-border bg-base-0 px-3 py-2 text-xs leading-relaxed text-text-primary outline-none transition-colors focus:border-accent/40"
+              placeholder='Describe when to classify as this status, e.g.: "The prospect explicitly expresses interest..."'
+            />
+          )}
 
           {/* Mode toggle */}
           {hasKnowledge && (
-            <div className="mt-3 flex items-center gap-2">
+            <div className="mt-2 flex items-center gap-2">
               <label className="text-[10px] font-semibold uppercase tracking-widest text-text-muted">
                 Response mode
               </label>
               <button
                 onClick={toggleMode}
                 className={`rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all ${
-                  !isKnowledgeMode
-                    ? "bg-accent/15 text-accent"
-                    : "bg-base-3 text-text-muted hover:text-text-secondary"
+                  !isKnowledgeMode ? "bg-accent/15 text-accent" : "bg-base-3 text-text-muted hover:text-text-secondary"
                 }`}
               >
                 Templates
@@ -603,9 +963,7 @@ function CategoryRow({
               <button
                 onClick={toggleMode}
                 className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all ${
-                  isKnowledgeMode
-                    ? "bg-emerald-500/15 text-emerald-400"
-                    : "bg-base-3 text-text-muted hover:text-text-secondary"
+                  isKnowledgeMode ? "bg-emerald-500/15 text-emerald-400" : "bg-base-3 text-text-muted hover:text-text-secondary"
                 }`}
               >
                 <BookOpen size={10} />
@@ -614,13 +972,13 @@ function CategoryRow({
             </div>
           )}
 
-          {/* Templates section (only in template mode) */}
-          {!isKnowledgeMode && (
+          {/* Templates (only if not hidden and not knowledge mode) */}
+          {!hideTemplates && !isKnowledgeMode && (
             <div className="mt-3">
               <div className="flex items-center justify-between">
                 <button
                   onClick={() => setShowTemplates(!showTemplates)}
-                  className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-muted transition-colors hover:text-text-secondary"
+                  className="flex cursor-pointer items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-muted transition-colors hover:text-text-secondary"
                 >
                   <ChevronRightIcon
                     size={11}
@@ -631,7 +989,7 @@ function CategoryRow({
                 {showTemplates && (
                   <button
                     onClick={addTemplate}
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-text-muted transition-all hover:bg-base-3 hover:text-accent"
+                    className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-text-muted transition-all hover:bg-base-3 hover:text-accent"
                   >
                     <Plus size={11} />
                     Add
@@ -641,18 +999,11 @@ function CategoryRow({
               {showTemplates && (
                 <div className="mt-1.5 space-y-1.5">
                   {templates.map((tpl) => (
-                    <TemplateRow
-                      key={tpl.id}
-                      template={tpl}
-                      onUpdate={updateTemplate}
-                      onDelete={deleteTemplate}
-                    />
+                    <TemplateRow key={tpl.id} template={tpl} onUpdate={updateTemplate} onDelete={deleteTemplate} />
                   ))}
                   {templates.length === 0 && (
                     <div className="rounded-md border border-dashed border-border bg-base-0/50 px-3 py-3 text-center">
-                      <p className="text-[11px] text-text-muted">
-                        No templates for this category.
-                      </p>
+                      <p className="text-[11px] text-text-muted">No templates for this category.</p>
                     </div>
                   )}
                 </div>
@@ -664,7 +1015,7 @@ function CategoryRow({
           {isKnowledgeMode && (
             <div className="mt-3 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
               <p className="text-[11px] leading-relaxed text-emerald-300/80">
-                When classified as this category, the AI will generate a response using the Knowledge Base documents instead of suggesting a template.
+                The AI will generate a free response using the Knowledge Base documents instead of suggesting a template.
               </p>
             </div>
           )}
@@ -687,6 +1038,14 @@ function TemplateRow({
 }) {
   const [name, setName] = useState(template.name);
   const [body, setBody] = useState(template.body);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [body]);
 
   return (
     <div className="group rounded-md border border-border bg-base-0 px-3 py-2">
@@ -707,10 +1066,12 @@ function TemplateRow({
         </button>
       </div>
       <textarea
+        ref={bodyRef}
         value={body}
         onChange={(e) => setBody(e.target.value)}
         onBlur={() => body !== template.body && onUpdate(template.id, { body })}
-        rows={2}
+        rows={1}
+        style={{ overflow: "hidden" }}
         className="mt-1.5 w-full resize-none bg-transparent text-[11px] leading-relaxed text-text-secondary outline-none placeholder:text-text-muted"
         placeholder="Write template text..."
       />
@@ -737,14 +1098,10 @@ function FieldRow({
       <input
         value={fieldName}
         onChange={(e) => setFieldName(e.target.value)}
-        onBlur={() =>
-          fieldName !== field.field_name &&
-          onUpdate(field.id, { field_name: fieldName })
-        }
+        onBlur={() => fieldName !== field.field_name && onUpdate(field.id, { field_name: fieldName })}
         className="w-32 bg-transparent font-mono text-xs font-medium text-text-primary outline-none"
         placeholder="field_name"
       />
-
       <select
         value={field.field_type}
         onChange={(e) => onUpdate(field.id, { field_type: e.target.value as ExtractField["field_type"] })}
@@ -755,18 +1112,13 @@ function FieldRow({
         <option value="number">number</option>
         <option value="date">date</option>
       </select>
-
       <input
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        onBlur={() =>
-          description !== field.description &&
-          onUpdate(field.id, { description })
-        }
+        onBlur={() => description !== field.description && onUpdate(field.id, { description })}
         className="flex-1 bg-transparent text-xs text-text-secondary outline-none"
         placeholder="Description for the AI..."
       />
-
       <button
         onClick={() => onDelete(field.id)}
         className="rounded-md p-1.5 text-text-muted transition-all hover:bg-danger/10 hover:text-danger"

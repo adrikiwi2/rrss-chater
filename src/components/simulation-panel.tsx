@@ -13,6 +13,8 @@ import {
   HelpCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  Bell,
+  BellOff,
 } from "lucide-react";
 import { ChatBubble } from "./chat-bubble";
 import { AiResultCard } from "./ai-result-card";
@@ -31,6 +33,8 @@ interface SimulationPanelProps {
   roleBLabel: string;
   categories: Category[];
   templates: Template[];
+  fireAlerts: boolean;
+  onToggleAlerts: (value: boolean) => void;
 }
 
 export function SimulationPanel({
@@ -39,6 +43,8 @@ export function SimulationPanel({
   roleBLabel,
   categories,
   templates,
+  fireAlerts,
+  onToggleAlerts,
 }: SimulationPanelProps) {
   const [simulations, setSimulations] = useState<Simulation[]>([]);
   const [activeSimId, setActiveSimId] = useState<string | null>(null);
@@ -56,6 +62,16 @@ export function SimulationPanel({
   const [expandedResults, setExpandedResults] = useState<Set<string>>(new Set());
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const maxH = 120;
+    el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+    el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
+  }, [inputText]);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -159,7 +175,7 @@ export function SimulationPanel({
       const res = await fetch("/api/inference", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ flow_id: flowId, messages }),
+        body: JSON.stringify({ flow_id: flowId, messages, fire_alerts: fireAlerts }),
       });
 
       if (!res.ok) {
@@ -396,6 +412,19 @@ export function SimulationPanel({
             {hasUnsaved && (
               <span className="mr-1 text-[10px] text-warning">unsaved</span>
             )}
+            {/* Fire alerts toggle */}
+            <button
+              onClick={() => onToggleAlerts(!fireAlerts)}
+              title={fireAlerts ? "Alerts ON — click to disable during simulation" : "Alerts OFF — click to fire real alerts on inference"}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-all ${
+                fireAlerts
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                  : "border-border-bright text-text-muted hover:border-border hover:text-text-secondary"
+              }`}
+            >
+              {fireAlerts ? <Bell size={12} /> : <BellOff size={12} />}
+              {fireAlerts ? "Alerts ON" : "Alerts OFF"}
+            </button>
             <button
               onClick={runInference}
               disabled={isInferring || messages.length === 0 || categories.length === 0}
@@ -526,10 +555,12 @@ export function SimulationPanel({
                 {viewMode === "a" ? roleALabel : roleBLabel}
               </span>
               <textarea
+                ref={inputRef}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyDown}
                 rows={1}
+                style={{ overflow: "hidden" }}
                 className="flex-1 resize-none bg-transparent text-sm text-text-primary outline-none"
                 placeholder="Type a message..."
               />

@@ -1148,3 +1148,83 @@ export async function countAlertRulesByFlow(flowId: string): Promise<number> {
   });
   return (rs.rows[0] as unknown as { n: number }).n;
 }
+
+export interface AlertRuleRow {
+  id: string;
+  event_type: string;
+  conditions: string | null;
+  template: string;
+  is_active: number;
+  dest_name: string;
+  provider: string;
+  destination_id: string;
+}
+
+export interface AlertDestinationRow {
+  id: string;
+  name: string;
+  provider: string;
+  config: string;
+  is_active: number;
+}
+
+export interface AlertLogRow {
+  id: string;
+  rule_id: string;
+  status: string;
+  payload: string | null;
+  created_at: string;
+  event_type: string;
+  dest_name: string;
+}
+
+export async function getAlertRulesForFlow(
+  tenantId: string,
+  flowId: string
+): Promise<AlertRuleRow[]> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: `SELECT r.id, r.event_type, r.conditions, r.template, r.is_active,
+                 r.destination_id, d.name as dest_name, d.provider
+          FROM alert_rules r
+          JOIN alert_destinations d ON r.destination_id = d.id
+          WHERE r.tenant_id = ? AND r.flow_id = ?
+          ORDER BY r.event_type, r.created_at`,
+    args: [tenantId, flowId],
+  });
+  return rs.rows as unknown as AlertRuleRow[];
+}
+
+export async function getAlertDestinationsForTenant(
+  tenantId: string
+): Promise<AlertDestinationRow[]> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: `SELECT id, name, provider, config, is_active
+          FROM alert_destinations
+          WHERE tenant_id = ?
+          ORDER BY name`,
+    args: [tenantId],
+  });
+  return rs.rows as unknown as AlertDestinationRow[];
+}
+
+export async function getAlertLogsForFlow(
+  tenantId: string,
+  flowId: string,
+  limit = 20
+): Promise<AlertLogRow[]> {
+  const c = await db();
+  const rs = await c.execute({
+    sql: `SELECT l.id, l.rule_id, l.status, l.payload, l.created_at,
+                 r.event_type, d.name as dest_name
+          FROM alert_logs l
+          JOIN alert_rules r ON l.rule_id = r.id
+          JOIN alert_destinations d ON r.destination_id = d.id
+          WHERE r.tenant_id = ? AND r.flow_id = ?
+          ORDER BY l.created_at DESC
+          LIMIT ?`,
+    args: [tenantId, flowId, limit],
+  });
+  return rs.rows as unknown as AlertLogRow[];
+}

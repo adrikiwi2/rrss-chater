@@ -9,14 +9,16 @@ import {
   ChevronDown,
   ChevronUp,
   Settings2,
+  Bell,
 } from "lucide-react";
 import { FlowDesigner } from "@/components/flow-designer";
 import { SimulationPanel } from "@/components/simulation-panel";
 import { LivePanel } from "@/components/live-panel";
+import { AlertsPanel } from "@/components/alerts-panel";
 import { AgentConfigPanel } from "@/components/agent-config-panel";
 import type { FlowWithDetails } from "@/lib/types";
 
-type Tab = "designer" | "simulate" | "live";
+type Tab = "designer" | "simulate" | "live" | "alerts";
 
 export default function FlowPage() {
   const { flowId } = useParams<{ flowId: string }>();
@@ -24,6 +26,15 @@ export default function FlowPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("designer");
   const [showConfig, setShowConfig] = useState(false);
+  const [fireAlerts, setFireAlerts] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(`flowlab_sim_alerts_${flowId}`) === "true";
+  });
+
+  const handleToggleAlerts = (value: boolean) => {
+    setFireAlerts(value);
+    localStorage.setItem(`flowlab_sim_alerts_${flowId}`, String(value));
+  };
 
   // Editable config fields
   const [roleA, setRoleA] = useState("");
@@ -66,6 +77,7 @@ export default function FlowPage() {
     { key: "designer", label: "Designer", icon: Layers },
     { key: "simulate", label: "Simulate", icon: MessageSquare },
     { key: "live", label: "Live", icon: Radio },
+    { key: "alerts", label: "Alerts", icon: Bell },
   ];
 
   if (loading || !flow) {
@@ -202,6 +214,8 @@ export default function FlowPage() {
             roleBLabel={roleB || "Prospect"}
             categories={flow.categories}
             templates={flow.templates}
+            fireAlerts={fireAlerts}
+            onToggleAlerts={handleToggleAlerts}
           />
         )}
         {activeTab === "live" && (
@@ -212,6 +226,13 @@ export default function FlowPage() {
             categories={flow.categories}
             templates={flow.templates}
             agentConfig={flow.agent_config}
+          />
+        )}
+        {activeTab === "alerts" && (
+          <AlertsPanel
+            flowId={flowId}
+            fireAlerts={fireAlerts}
+            onToggleAlerts={handleToggleAlerts}
           />
         )}
       </div>
