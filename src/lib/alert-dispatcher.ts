@@ -78,13 +78,13 @@ async function sendWhatsApp(jid: string, message: string): Promise<void> {
   const secret = process.env.NOTIFY_SECRET;
   if (!url || !secret) throw new Error("NOTIFY_SERVICE_URL or NOTIFY_SECRET not configured");
 
-  const res = await fetch(`${url}/send`, {
+  const res = await fetch(`${url}/notify`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${secret}`,
     },
-    body: JSON.stringify({ jid, message }),
+    body: JSON.stringify({ to: jid, message }),
   });
 
   if (!res.ok) {
