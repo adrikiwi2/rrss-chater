@@ -7,6 +7,7 @@ import { SimulationPanel } from "@/components/simulation-panel";
 import { LivePanel } from "@/components/live-panel";
 import { AlertsPanel } from "@/components/alerts-panel";
 import { AgentConfigPanel } from "@/components/agent-config-panel";
+import { OverviewPanel } from "@/components/overview-panel";
 import type { FlowWithDetails } from "@/lib/types";
 
 type Section = "overview" | "conversation" | "design" | "logs" | "config";
@@ -88,9 +89,7 @@ function FlowPageInner() {
       <div className={`min-h-0 flex-1 ${section === "conversation" ? "overflow-hidden" : "overflow-y-auto"}`}>
         {section === "overview" && (
           <div className="p-6">
-            <p className="text-sm text-text-muted">
-              Overview — próximamente (métricas del flow)
-            </p>
+            <OverviewPanel flowId={flowId} />
           </div>
         )}
 
