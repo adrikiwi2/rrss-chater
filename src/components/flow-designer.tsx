@@ -1045,7 +1045,7 @@ function TemplateRow({
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [body]);
+  }); // run on every render so initial load with existing body also sizes correctly
 
   return (
     <div className="group rounded-md border border-border bg-base-0 px-3 py-2">
