@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { Clock, CheckCircle2, XCircle, Inbox } from "lucide-react";
 import { FlowDesigner } from "@/components/flow-designer";
 import { SimulationPanel } from "@/components/simulation-panel";
 import { LivePanel } from "@/components/live-panel";
@@ -10,12 +11,12 @@ import { AgentConfigPanel } from "@/components/agent-config-panel";
 import { OverviewPanel } from "@/components/overview-panel";
 import type { FlowWithDetails } from "@/lib/types";
 
-type Section = "overview" | "conversation" | "design" | "logs" | "config";
+type Section = "overview" | "outbox" | "simulate" | "design" | "logs" | "config";
 
 function FlowPageInner() {
   const { flowId } = useParams<{ flowId: string }>();
   const searchParams = useSearchParams();
-  const section = (searchParams.get("s") as Section) || "conversation";
+  const section = (searchParams.get("s") as Section) || "outbox";
 
   const [flow, setFlow] = useState<FlowWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,24 +87,30 @@ function FlowPageInner() {
       </div>
 
       {/* Section content */}
-      <div className={`min-h-0 flex-1 ${section === "conversation" ? "overflow-hidden" : "overflow-y-auto"}`}>
+      <div className={`min-h-0 flex-1 ${section === "simulate" ? "overflow-hidden" : "overflow-y-auto"}`}>
         {section === "overview" && (
           <div className="p-6">
             <OverviewPanel flowId={flowId} />
           </div>
         )}
 
-        {section === "conversation" && (
+        {section === "outbox" && (
+          <div className="p-6">
+            <OutboxSection flowId={flowId} />
+          </div>
+        )}
+
+        {section === "simulate" && (
           <div className="h-full">
-          <SimulationPanel
-            flowId={flowId}
-            roleALabel={roleA || "Company"}
-            roleBLabel={roleB || "Prospect"}
-            categories={flow.categories}
-            templates={flow.templates}
-            fireAlerts={fireAlerts}
-            onToggleAlerts={handleToggleAlerts}
-          />
+            <SimulationPanel
+              flowId={flowId}
+              roleALabel={roleA || "Company"}
+              roleBLabel={roleB || "Prospect"}
+              categories={flow.categories}
+              templates={flow.templates}
+              fireAlerts={fireAlerts}
+              onToggleAlerts={handleToggleAlerts}
+            />
           </div>
         )}
 
@@ -237,6 +244,129 @@ function FlowPageInner() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── Outbox Section ──────────────────────────── */
+
+interface OutboxItem {
+  id: string;
+  lead_id: string;
+  channel: string;
+  action: string;
+  payload_json: string;
+  status: string;
+  created_at: string;
+}
+
+function OutboxSection({ flowId }: { flowId: string }) {
+  const [items, setItems] = useState<OutboxItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [acting, setActing] = useState<string | null>(null);
+
+  const fetchOutbox = useCallback(async () => {
+    const res = await fetch(`/api/outbox?flow_id=${flowId}`);
+    if (res.ok) setItems(await res.json());
+    setLoading(false);
+  }, [flowId]);
+
+  useEffect(() => { fetchOutbox(); }, [fetchOutbox]);
+
+  const act = async (id: string, action: "approve" | "reject") => {
+    setActing(id);
+    await fetch(`/api/outbox/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    await fetchOutbox();
+    setActing(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      {/* Disclaimer banner */}
+      <div className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${
+        items.length > 0
+          ? "border-amber-500/30 bg-amber-500/10"
+          : "border-border bg-base-1"
+      }`}>
+        <Inbox size={15} className={items.length > 0 ? "text-amber-400" : "text-text-muted"} />
+        <p className={`text-sm font-medium ${items.length > 0 ? "text-amber-300" : "text-text-muted"}`}>
+          {items.length > 0
+            ? `${items.length} mensaje${items.length > 1 ? "s" : ""} pendiente${items.length > 1 ? "s" : ""} de aprobación`
+            : "Sin mensajes pendientes"}
+        </p>
+      </div>
+
+      {/* Items */}
+      {items.length > 0 && (
+        <div className="space-y-3">
+          {items.map((item) => {
+            const payload = JSON.parse(item.payload_json) as {
+              text?: string;
+              template_name?: string;
+              generated?: boolean;
+              inference_result?: { detected_status?: string };
+            };
+            return (
+              <div key={item.id} className="rounded-lg border border-border bg-base-0 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Clock size={12} className="text-amber-400" />
+                  <span className="text-[11px] font-medium uppercase tracking-widest text-amber-400">
+                    Pendiente
+                  </span>
+                  {payload.template_name && (
+                    <span className="ml-auto rounded-full border border-border bg-base-2 px-2 py-0.5 text-[10px] text-text-muted">
+                      {payload.template_name}
+                    </span>
+                  )}
+                  {payload.generated && (
+                    <span className="ml-auto rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400">
+                      AI generado
+                    </span>
+                  )}
+                  {payload.inference_result?.detected_status && (
+                    <span className="rounded-full border border-border bg-base-2 px-2 py-0.5 text-[10px] text-text-muted">
+                      {payload.inference_result.detected_status}
+                    </span>
+                  )}
+                </div>
+                <p className="mb-4 text-sm leading-relaxed text-text-primary">
+                  {payload.text || "—"}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    disabled={acting === item.id}
+                    onClick={() => act(item.id, "approve")}
+                    className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/20 disabled:opacity-50"
+                  >
+                    <CheckCircle2 size={12} />
+                    Aprobar y enviar
+                  </button>
+                  <button
+                    disabled={acting === item.id}
+                    onClick={() => act(item.id, "reject")}
+                    className="flex items-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:bg-red-500/20 disabled:opacity-50"
+                  >
+                    <XCircle size={12} />
+                    Rechazar
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

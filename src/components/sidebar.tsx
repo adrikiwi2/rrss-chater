@@ -12,7 +12,8 @@ import {
   Sun,
   Moon,
   LayoutDashboard,
-  MessageSquare,
+  Inbox,
+  FlaskConical,
   Layers,
   ScrollText,
   Settings2,
@@ -24,11 +25,12 @@ import {
 import type { Flow } from "@/lib/types";
 
 const SECTIONS = [
-  { key: "overview", label: "Overview", icon: LayoutDashboard },
-  { key: "conversation", label: "Conversación", icon: MessageSquare },
-  { key: "design", label: "Diseño", icon: Layers },
-  { key: "logs", label: "Logs", icon: ScrollText },
-  { key: "config", label: "Config", icon: Settings2 },
+  { key: "overview",  label: "Overview",  icon: LayoutDashboard },
+  { key: "outbox",    label: "Outbox",    icon: Inbox },
+  { key: "simulate",  label: "Simulate",  icon: FlaskConical },
+  { key: "design",    label: "Diseño",    icon: Layers },
+  { key: "logs",      label: "Logs",      icon: ScrollText },
+  { key: "config",    label: "Config",    icon: Settings2 },
 ] as const;
 
 type SectionKey = (typeof SECTIONS)[number]["key"];
@@ -62,7 +64,7 @@ function SidebarInner() {
   const pathParts = pathname.split("/");
   const activeFlowId =
     pathParts[1] === "flow" && pathParts[2] ? pathParts[2] : null;
-  const activeSection = (searchParams.get("s") as SectionKey) || "conversation";
+  const activeSection = (searchParams.get("s") as SectionKey) || "outbox";
   const activeFlow = flows.find((f) => f.id === activeFlowId);
 
   // Close dropdown on outside click
@@ -114,7 +116,7 @@ function SidebarInner() {
       });
       const flow = await res.json();
       await fetchFlows();
-      router.push(`/flow/${flow.id}?s=conversation`);
+      router.push(`/flow/${flow.id}?s=outbox`);
     } finally {
       setIsCreating(false);
     }
